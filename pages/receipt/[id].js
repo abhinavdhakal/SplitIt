@@ -15,8 +15,9 @@ export default function ReceiptView() {
   const [splittingItem, setSplittingItem] = useState(null);
   const [splitShares, setSplitShares] = useState({});
   const [editingMode, setEditingMode] = useState(false);
-  const [editingItem, setEditingItem] = useState(null);
+  const [editingItemId, setEditingItemId] = useState(null);
   const [editingTip, setEditingTip] = useState(false);
+  const [editingReceiptName, setEditingReceiptName] = useState(false);
 
   useEffect(() => {
     if (!receiptId) return;
@@ -37,19 +38,43 @@ export default function ReceiptView() {
   }
 
   async function fetchReceipt() {
-    const { data } = await supabase
-      .from("receipts")
-      .select("*")
-      .eq("id", receiptId)
-      .single();
-    setReceipt(data);
+    try {
+      const { data, error } = await supabase
+        .from("receipts")
+        .select("*")
+        .eq("id", receiptId)
+        .single();
+
+      if (error || !data) {
+        // Receipt not found (likely deleted)
+        console.log("Receipt not found or deleted:", receiptId);
+        setReceipt("DELETED"); // Special state to indicate deleted receipt
+        return;
+      }
+
+      setReceipt(data);
+    } catch (error) {
+      console.error("Error fetching receipt:", error);
+      setReceipt("DELETED");
+    }
   }
   async function fetchItems() {
-    const { data } = await supabase
-      .from("items")
-      .select("*")
-      .eq("receipt_id", receiptId);
-    setItems(data || []);
+    try {
+      const { data, error } = await supabase
+        .from("items")
+        .select("*")
+        .eq("receipt_id", receiptId);
+
+      if (error) {
+        console.error("Error fetching items:", error);
+        return;
+      }
+
+      setItems(data || []);
+    } catch (error) {
+      console.error("Error fetching items:", error);
+      setItems([]);
+    }
   }
 
   async function fetchItemClaims() {
@@ -370,6 +395,25 @@ export default function ReceiptView() {
         return;
       }
 
+      // Check for unclaimed available items
+      const availableItems = receiptItems.filter(
+        (item) => item.available !== false
+      );
+      const unclaimedItems = availableItems.filter((item) => {
+        const claims = itemClaims[item.id] || [];
+        return claims.length === 0;
+      });
+
+      if (unclaimedItems.length > 0) {
+        const itemNames = unclaimedItems
+          .map((item) => `• ${item.name}`)
+          .join("\n");
+        alert(
+          `Cannot finalize receipt with unclaimed items:\n\n${itemNames}\n\nPlease claim or mark these items as unavailable before finalizing.`
+        );
+        return;
+      }
+
       // Import finalization logic
       const { finalizeShares } = await import("../../utils/finalize");
 
@@ -418,9 +462,24 @@ export default function ReceiptView() {
         }
       }
 
+      // Calculate adjusted tax based on available items (same logic as receipt summary)
+      const availableReceiptItems = receiptItems.filter(
+        (item) => item.available !== false
+      );
+      const availableSubtotalAmount = availableReceiptItems.reduce(
+        (sum, item) => sum + Number(item.total_price || 0),
+        0
+      );
+      const originalSubtotalAmount = Number(receipt.subtotal || 0);
+      const availableRatio =
+        originalSubtotalAmount > 0
+          ? availableSubtotalAmount / originalSubtotalAmount
+          : 1;
+      const adjustedTax = Number(receipt.tax_total || 0) * availableRatio;
+
       const result = finalizeShares(
         itemsForFinalize,
-        Number(receipt.tax_total || 0),
+        adjustedTax,
         Number(receipt.tip_total || 0)
       );
 
@@ -550,7 +609,7 @@ export default function ReceiptView() {
     }
   }
 
-  async function updateItem(itemId, updates) {
+  async function updateItem(itemId, updates, closeEditMode = true) {
     if (!currentUser || receipt.uploader_user_id !== currentUser.id) {
       alert("Only the receipt uploader can edit items.");
       return;
@@ -564,18 +623,12 @@ export default function ReceiptView() {
 
       if (error) throw error;
 
-      // Log the action
-      await supabase.from("logs").insert([
-        {
-          receipt_id: receiptId,
-          user_id: currentUser.id,
-          action: "edit_item",
-          details: { itemId, updates },
-        },
-      ]);
-
       fetchItems(); // Refresh items
-      setEditingItem(null); // Close editing mode
+      fetchReceipt(); // Refresh receipt summary
+      if (closeEditMode) {
+        console.log("Closing edit mode from updateItem");
+        setEditingItemId(null); // Close editing mode only if requested
+      }
     } catch (error) {
       console.error("Error updating item:", error);
       alert("Error updating item. Please try again.");
@@ -609,16 +662,6 @@ export default function ReceiptView() {
 
       if (error) throw error;
 
-      // Log the action
-      await supabase.from("logs").insert([
-        {
-          receipt_id: receiptId,
-          user_id: currentUser.id,
-          action: "edit_tip",
-          details: { from: receipt.tip_total, to: tipAmount },
-        },
-      ]);
-
       fetchReceipt(); // Refresh receipt
       setEditingTip(false); // Close editing mode
     } catch (error) {
@@ -627,15 +670,124 @@ export default function ReceiptView() {
     }
   }
 
+  async function updateReceiptName(newName) {
+    if (!currentUser || receipt.uploader_user_id !== currentUser.id) {
+      alert("Only the receipt uploader can edit the receipt name.");
+      return;
+    }
+
+    try {
+      const receiptName = newName.trim();
+      if (!receiptName) {
+        alert("Please enter a valid receipt name.");
+        return;
+      }
+
+      const { error } = await supabase
+        .from("receipts")
+        .update({
+          name: receiptName,
+        })
+        .eq("id", receiptId);
+
+      if (error) throw error;
+
+      fetchReceipt(); // Refresh receipt
+      setEditingReceiptName(false); // Close editing mode
+    } catch (error) {
+      console.error("Error updating receipt name:", error);
+      alert("Error updating receipt name. Please try again.");
+    }
+  }
+
   if (!receipt) return <div className="p-6">Loading...</div>;
+
+  if (receipt === "DELETED") {
+    return (
+      <div className="min-h-screen bg-slate-50 p-6">
+        <div className="max-w-2xl mx-auto text-center">
+          <div className="bg-white p-8 rounded shadow">
+            <div className="text-6xl mb-4">🗑️</div>
+            <h1 className="text-2xl font-bold text-gray-800 mb-4">
+              Receipt Deleted
+            </h1>
+            <p className="text-gray-600 mb-6">
+              This receipt has been deleted by the uploader and is no longer
+              available.
+            </p>
+            <Link
+              href="/"
+              className="inline-block px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+            >
+              ← Back to Home
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 p-6">
       <div className="max-w-4xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold">Receipt Details</h1>
-            <p className="text-sm text-gray-600">{receipt.filename}</p>
+            {/* Receipt name with editing capability */}
+            {editingReceiptName && editingMode ? (
+              <input
+                type="text"
+                defaultValue={
+                  receipt.name || receipt.filename || "Untitled Receipt"
+                }
+                className="text-2xl font-bold bg-white border rounded px-3 py-2 w-full max-w-md"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    updateReceiptName(e.target.value);
+                  } else if (e.key === "Escape") {
+                    setEditingReceiptName(false);
+                  }
+                }}
+                onBlur={(e) => {
+                  setTimeout(() => {
+                    const newName = e.target.value.trim();
+                    if (
+                      newName &&
+                      newName !== (receipt.name || receipt.filename)
+                    ) {
+                      updateReceiptName(newName);
+                    } else {
+                      setEditingReceiptName(false);
+                    }
+                  }, 100);
+                }}
+                autoFocus
+                onFocus={(e) => e.target.select()}
+              />
+            ) : (
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-bold">
+                  {receipt.name || receipt.filename || "Untitled Receipt"}
+                </h1>
+                {editingMode &&
+                  currentUser &&
+                  receipt.uploader_user_id === currentUser.id && (
+                    <button
+                      onClick={() => setEditingReceiptName(true)}
+                      className="text-sm text-blue-600 hover:text-blue-800"
+                      title="Click to edit receipt name"
+                    >
+                      ✏️
+                    </button>
+                  )}
+              </div>
+            )}
+            <p className="text-sm text-gray-600">
+              {receipt.filename &&
+              receipt.name &&
+              receipt.name !== receipt.filename
+                ? `File: ${receipt.filename}`
+                : ""}
+            </p>
             {receipt.uploader_user_id && (
               <p className="text-xs text-gray-500 mt-1">
                 Uploaded by{" "}
@@ -654,11 +806,11 @@ export default function ReceiptView() {
                   className={`px-3 py-2 text-sm rounded hover:bg-purple-700 transition-colors flex items-center gap-1 ${
                     editingMode
                       ? "bg-purple-600 text-white"
-                      : "bg-purple-100 text-purple-700 hover:bg-purple-200"
+                      : "bg-purple-100 text-purple-700 hover:bg-purple-200 hover:text-white"
                   }`}
                   title="Edit receipt items and amounts"
                 >
-                  ✏️ {editingMode ? "Exit Edit" : "Edit"}
+                  {editingMode ? "Exit Edit" : "Edit"}
                 </button>
               )}
             {/* Finalize button - only show to uploader for open receipts */}
@@ -670,7 +822,7 @@ export default function ReceiptView() {
                   className="px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors flex items-center gap-1"
                   title="Calculate final expense splits"
                 >
-                  ✅ Finalize
+                  Finalize
                 </button>
               )}
             {/* Undo finalization button - only show to uploader for finalized receipts */}
@@ -682,7 +834,7 @@ export default function ReceiptView() {
                   className="px-3 py-2 bg-yellow-600 text-white text-sm rounded hover:bg-yellow-700 transition-colors flex items-center gap-1"
                   title="Reopen this receipt for editing"
                 >
-                  ↩️ Reopen
+                  Reopen
                 </button>
               )}
             {/* Delete button - only show to uploader */}
@@ -692,7 +844,7 @@ export default function ReceiptView() {
                 className="px-3 py-2 bg-red-600 text-white text-sm rounded hover:bg-red-700 transition-colors flex items-center gap-1"
                 title="Delete this receipt"
               >
-                🗑️ Delete
+                Delete
               </button>
             )}
             <Link
@@ -799,13 +951,54 @@ export default function ReceiptView() {
             <div>
               <h2 className="text-lg font-bold mb-2">Receipt Summary</h2>
               <div className="space-y-1 text-sm">
-                <div>
-                  Subtotal:{" "}
-                  <span className="font-medium">${receipt.subtotal}</span>
-                </div>
-                <div>
-                  Tax: <span className="font-medium">${receipt.tax_total}</span>
-                </div>
+                {(() => {
+                  // Calculate available items total
+                  const availableItems = items.filter(
+                    (item) => item.available !== false
+                  );
+                  const availableSubtotal = availableItems.reduce(
+                    (sum, item) => sum + Number(item.total_price || 0),
+                    0
+                  );
+                  const originalSubtotal = Number(receipt.subtotal || 0);
+                  const availableRatio =
+                    originalSubtotal > 0
+                      ? availableSubtotal / originalSubtotal
+                      : 1;
+                  const adjustedTax =
+                    Number(receipt.tax_total || 0) * availableRatio;
+                  const adjustedTotal =
+                    availableSubtotal +
+                    adjustedTax +
+                    Number(receipt.tip_total || 0);
+
+                  return (
+                    <>
+                      <div>
+                        Subtotal (available items):{" "}
+                        <span className="font-medium">
+                          ${availableSubtotal.toFixed(2)}
+                        </span>
+                        {availableSubtotal !== originalSubtotal && (
+                          <span className="text-xs text-gray-500 ml-1">
+                            (was ${originalSubtotal.toFixed(2)})
+                          </span>
+                        )}
+                      </div>
+                      <div>
+                        Tax (adjusted):{" "}
+                        <span className="font-medium">
+                          ${adjustedTax.toFixed(2)}
+                        </span>
+                        {adjustedTax !== Number(receipt.tax_total || 0) && (
+                          <span className="text-xs text-gray-500 ml-1">
+                            (was ${Number(receipt.tax_total || 0).toFixed(2)})
+                          </span>
+                        )}
+                      </div>
+                    </>
+                  );
+                })()}
                 <div className="flex items-center gap-2">
                   <span>Tip:</span>
                   {editingTip && editingMode ? (
@@ -846,7 +1039,37 @@ export default function ReceiptView() {
                   )}
                 </div>
                 <div className="border-t pt-1 font-semibold">
-                  Total: ${receipt.total}
+                  {(() => {
+                    const availableItems = items.filter(
+                      (item) => item.available !== false
+                    );
+                    const availableSubtotal = availableItems.reduce(
+                      (sum, item) => sum + Number(item.total_price || 0),
+                      0
+                    );
+                    const originalSubtotal = Number(receipt.subtotal || 0);
+                    const availableRatio =
+                      originalSubtotal > 0
+                        ? availableSubtotal / originalSubtotal
+                        : 1;
+                    const adjustedTax =
+                      Number(receipt.tax_total || 0) * availableRatio;
+                    const adjustedTotal =
+                      availableSubtotal +
+                      adjustedTax +
+                      Number(receipt.tip_total || 0);
+
+                    return (
+                      <>
+                        Total (available): ${adjustedTotal.toFixed(2)}
+                        {adjustedTotal !== Number(receipt.total || 0) && (
+                          <span className="text-xs text-gray-500 ml-1">
+                            (was ${Number(receipt.total || 0).toFixed(2)})
+                          </span>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
@@ -897,7 +1120,7 @@ export default function ReceiptView() {
                       ></div>
 
                       {/* Item name with editing capability */}
-                      {editingItem?.id === it.id ? (
+                      {editingItemId === it.id ? (
                         <input
                           type="text"
                           defaultValue={it.name}
@@ -906,18 +1129,25 @@ export default function ReceiptView() {
                             if (e.key === "Enter") {
                               updateItem(it.id, { name: e.target.value });
                             } else if (e.key === "Escape") {
-                              setEditingItem(null);
+                              setEditingItemId(null);
                             }
                           }}
                           onBlur={(e) => {
-                            const newName = e.target.value.trim();
-                            if (newName && newName !== it.name) {
-                              updateItem(it.id, { name: newName });
-                            } else {
-                              setEditingItem(null);
-                            }
+                            // Longer delay to prevent immediate blur from button click
+                            console.log(
+                              "Name input blur triggered for:",
+                              it.id
+                            );
+                            setTimeout(() => {
+                              const newName = e.target.value.trim();
+                              if (newName && newName !== it.name) {
+                                updateItem(it.id, { name: newName }, false); // Don't close edit mode
+                              }
+                              // Don't auto-close on blur - let user use Enter/Escape
+                            }, 500);
                           }}
                           autoFocus
+                          onFocus={(e) => e.target.select()}
                         />
                       ) : (
                         <div
@@ -945,17 +1175,11 @@ export default function ReceiptView() {
                                     it.id
                                   );
                                   console.log(
-                                    "Current editingItem:",
-                                    editingItem?.id
+                                    "Current editingItemId before:",
+                                    editingItemId
                                   );
-                                  // Small delay to prevent immediate blur
-                                  setTimeout(() => {
-                                    console.log(
-                                      "Setting editingItem to:",
-                                      it.id
-                                    );
-                                    setEditingItem(it);
-                                  }, 10);
+                                  setEditingItemId(it.id);
+                                  console.log("Set editingItemId to:", it.id);
                                 }}
                                 className="text-xs text-blue-600 hover:text-blue-800"
                                 title="Click to edit item"
@@ -967,7 +1191,7 @@ export default function ReceiptView() {
                       )}
                     </div>
                     <div className="ml-5 mt-1 flex items-center gap-2">
-                      {editingItem?.id === it.id ? (
+                      {editingItemId === it.id ? (
                         <div className="flex items-center gap-2">
                           <span>$</span>
                           <input
@@ -984,23 +1208,32 @@ export default function ReceiptView() {
                                     parseFloat(e.target.value) / it.quantity,
                                 });
                               } else if (e.key === "Escape") {
-                                setEditingItem(null);
+                                setEditingItemId(null);
                               }
                             }}
                             onBlur={(e) => {
-                              // Only update if the value actually changed
-                              const newValue = parseFloat(e.target.value);
-                              if (
-                                !isNaN(newValue) &&
-                                newValue !== it.total_price
-                              ) {
-                                updateItem(it.id, {
-                                  total_price: newValue,
-                                  unit_price: newValue / it.quantity,
-                                });
-                              } else {
-                                setEditingItem(null);
-                              }
+                              // Longer delay to prevent immediate blur from button click
+                              console.log(
+                                "Price input blur triggered for:",
+                                it.id
+                              );
+                              setTimeout(() => {
+                                const newValue = parseFloat(e.target.value);
+                                if (
+                                  !isNaN(newValue) &&
+                                  newValue !== it.total_price
+                                ) {
+                                  updateItem(
+                                    it.id,
+                                    {
+                                      total_price: newValue,
+                                      unit_price: newValue / it.quantity,
+                                    },
+                                    false
+                                  ); // Don't close edit mode
+                                }
+                                // Don't auto-close on blur - let user use Enter/Escape
+                              }, 500);
                             }}
                             autoFocus
                             onFocus={(e) => e.target.select()}
@@ -1019,45 +1252,55 @@ export default function ReceiptView() {
                       )}
 
                       {/* Quantity - always show and editable in edit mode */}
-                      {editingItem?.id === it.id ? (
-                        <div className="ml-2 flex items-center gap-1">
-                          <span className="text-sm text-gray-500">×</span>
-                          <input
-                            type="number"
-                            min="1"
-                            step="1"
-                            defaultValue={it.quantity || 1}
-                            className="w-16 px-2 py-1 border rounded text-sm"
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                const newQty = parseInt(e.target.value) || 1;
-                                updateItem(it.id, {
-                                  quantity: newQty,
-                                  unit_price: it.total_price / newQty,
-                                });
-                              } else if (e.key === "Escape") {
-                                setEditingItem(null);
-                              }
-                            }}
-                            onBlur={(e) => {
-                              const newQty = parseInt(e.target.value) || 1;
-                              if (newQty !== (it.quantity || 1)) {
-                                updateItem(it.id, {
-                                  quantity: newQty,
-                                  unit_price: it.total_price / newQty,
-                                });
-                              } else {
-                                setEditingItem(null);
-                              }
-                            }}
-                            onFocus={(e) => e.target.select()}
-                          />
-                        </div>
-                      ) : (
-                        <span className="ml-2 text-sm text-gray-500">
-                          ×{it.quantity || 1}
-                        </span>
-                      )}
+                      {editingItemId === it.id ? (
+                          <div className="ml-2 flex items-center gap-1">
+                            <span className="text-sm text-gray-500">×</span>
+                            <input
+                              type="number"
+                              min="1"
+                              step="1"
+                              defaultValue={it.quantity || 1}
+                              className="w-16 px-2 py-1 border rounded text-sm"
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  const newQty = parseInt(e.target.value) || 1;
+                                  updateItem(it.id, {
+                                    quantity: newQty,
+                                    unit_price: it.total_price / newQty,
+                                  });
+                                } else if (e.key === "Escape") {
+                                  setEditingItemId(null);
+                                }
+                              }}
+                              onBlur={(e) => {
+                                // Longer delay to prevent immediate blur from button click
+                                console.log(
+                                  "Quantity input blur triggered for:",
+                                  it.id
+                                );
+                                setTimeout(() => {
+                                  const newQty = parseInt(e.target.value) || 1;
+                                  if (newQty !== (it.quantity || 1)) {
+                                    updateItem(
+                                      it.id,
+                                      {
+                                        quantity: newQty,
+                                        unit_price: it.total_price / newQty,
+                                      },
+                                      false
+                                    ); // Don't close edit mode
+                                  }
+                                  // Don't auto-close on blur - let user use Enter/Escape
+                                }, 500);
+                              }}
+                              onFocus={(e) => e.target.select()}
+                            />
+                          </div>
+                        ) : (
+                          <span className="ml-2 text-gray-500">
+                            ×{it.quantity || 1}
+                          </span>
+                        )}
 
                       {/* Availability toggle - only for uploader in edit mode */}
                       {editingMode &&

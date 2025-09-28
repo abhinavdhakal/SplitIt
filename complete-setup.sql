@@ -2,6 +2,44 @@
 -- Run this single file in your Supabase SQL Editor to set up everything
 
 -- ============================================
+-- STORAGE BUCKET SETUP (Run this first!)
+-- ============================================
+
+-- Create receipts bucket for PDF uploads (only if it doesn't exist)
+INSERT INTO storage.buckets (id, name, public) 
+VALUES ('receipts', 'receipts', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- Allow authenticated users to upload/read receipts (create policies only if they don't exist)
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Authenticated users can upload receipts' AND tablename = 'objects') THEN
+        CREATE POLICY "Authenticated users can upload receipts" ON storage.objects
+        FOR INSERT WITH CHECK (bucket_id = 'receipts' AND auth.role() = 'authenticated');
+    END IF;
+END $$;
+
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Authenticated users can view receipts' AND tablename = 'objects') THEN
+        CREATE POLICY "Authenticated users can view receipts" ON storage.objects
+        FOR SELECT USING (bucket_id = 'receipts' AND auth.role() = 'authenticated');
+    END IF;
+END $$;
+
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Authenticated users can update their receipts' AND tablename = 'objects') THEN
+        CREATE POLICY "Authenticated users can update their receipts" ON storage.objects
+        FOR UPDATE USING (bucket_id = 'receipts' AND auth.role() = 'authenticated');
+    END IF;
+END $$;
+
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Authenticated users can delete their receipts' AND tablename = 'objects') THEN
+        CREATE POLICY "Authenticated users can delete their receipts" ON storage.objects
+        FOR DELETE USING (bucket_id = 'receipts' AND auth.role() = 'authenticated');
+    END IF;
+END $$;
+
+-- ============================================
 -- MAIN TABLES
 -- ============================================
 
@@ -27,7 +65,8 @@ CREATE TABLE IF NOT EXISTS public.receipts (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     group_id UUID REFERENCES public.groups(id) ON DELETE CASCADE NOT NULL,
     uploader_user_id UUID,
-    filename TEXT,
+    name TEXT, -- Receipt name/title (editable by user)
+    filename TEXT, -- Original file name
     parsed_json JSONB,
     subtotal DECIMAL(10,2),
     tax_total DECIMAL(10,2) DEFAULT 0,
@@ -132,6 +171,18 @@ ALTER TABLE public.user_profiles DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.logs DISABLE ROW LEVEL SECURITY;
 
 -- ============================================
+-- ALTER EXISTING TABLES (ADD NEW COLUMNS)
+-- ============================================
+
+-- Add name column to receipts table if it doesn't exist
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name = 'receipts' AND column_name = 'name' AND table_schema = 'public') THEN
+        ALTER TABLE public.receipts ADD COLUMN name TEXT;
+    END IF;
+END $$;
+
+-- ============================================
 -- UPDATE EXISTING DATA
 -- ============================================
 
@@ -141,6 +192,15 @@ UPDATE public.items SET status = 'Available' WHERE status IS NULL;
 
 -- Update existing receipts to be tip editable
 UPDATE public.receipts SET tip_editable = true WHERE tip_editable IS NULL;
+
+-- Set default names for existing receipts without names (use filename as default)
+UPDATE public.receipts SET name = 
+    CASE 
+        WHEN filename IS NOT NULL THEN 
+            REPLACE(REPLACE(REPLACE(SUBSTRING(filename FROM '[^/]*$'), '.pdf', ''), '_', ' '), '-', ' ')
+        ELSE 'Untitled Receipt'
+    END
+WHERE name IS NULL;
 
 -- ============================================
 -- VERIFICATION QUERIES (OPTIONAL)

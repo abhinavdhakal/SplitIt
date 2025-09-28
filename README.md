@@ -95,7 +95,9 @@ npm install
 1. Create a new Supabase project at [supabase.com](https://supabase.com)
 2. Go to the **SQL Editor** in your Supabase dashboard
 3. Copy and paste the entire contents of `complete-setup.sql` and run it
-4. ✅ This single file sets up all tables, indexes, and functions needed!
+4. ✅ This single file sets up all tables, indexes, functions, AND storage bucket needed!
+
+**Note**: The setup includes creating a `receipts` storage bucket for PDF uploads with proper authentication policies.
 
 ### 3. **Environment Variables**
 Create `.env.local`:
@@ -185,6 +187,12 @@ npm start
 - Make sure you ran all SQL setup files in Supabase
 - Check that your user is authenticated (signed in with email)
 - The setup creates permissive policies for authenticated users
+
+### "Bucket not found" Error
+- Ensure you ran the complete `complete-setup.sql` file
+- The setup creates a `receipts` storage bucket automatically
+- If still having issues, manually create the bucket in Supabase Storage dashboard
+- Make sure the bucket is named exactly `receipts` and is set to public
 
 ## 🤝 Contributing
 

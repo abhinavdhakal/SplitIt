@@ -126,20 +126,100 @@ export default function GroupPage() {
 
     setLoading(true);
     try {
-      // load items for receipt
-      const { data: items } = await supabase
+      // Load items for receipt
+      const { data: receiptItems } = await supabase
         .from("items")
         .select("*")
         .eq("receipt_id", receipt.id);
-      // build items format expected
-      const itemsForFinalize = items.map((it) => ({
-        id: it.id,
-        total_price: Number(it.total_price),
-        claimed_by: it.claimed_by,
-      }));
+
+      if (!receiptItems || receiptItems.length === 0) {
+        alert("Cannot finalize receipt with no items.");
+        setLoading(false);
+        return;
+      }
+
+      // Load item claims to handle splitting properly
+      const { data: claims } = await supabase
+        .from("item_claims")
+        .select("*")
+        .in(
+          "item_id",
+          receiptItems.map((item) => item.id)
+        );
+
+      // Build claims map
+      const claimsMap = {};
+      claims?.forEach((claim) => {
+        if (!claimsMap[claim.item_id]) {
+          claimsMap[claim.item_id] = [];
+        }
+        claimsMap[claim.item_id].push(claim);
+      });
+
+      // Build items for finalization using the same logic as receipt page
+      const itemsForFinalize = [];
+
+      for (const item of receiptItems) {
+        // Skip unavailable items from finalization
+        if (item.available === false) {
+          console.log(`Skipping unavailable item: ${item.name}`);
+          continue;
+        }
+
+        const itemClaims = claimsMap[item.id] || [];
+
+        if (itemClaims.length === 0) {
+          // Unclaimed item - add as unclaimed
+          itemsForFinalize.push({
+            id: item.id,
+            total_price: Number(item.total_price),
+            claimed_by: null,
+          });
+        } else {
+          // Calculate proportional shares for split items
+          const totalShares = itemClaims.reduce(
+            (sum, claim) => sum + claim.claimed_quantity,
+            0
+          );
+          const itemPrice = Number(item.total_price);
+
+          for (const claim of itemClaims) {
+            // Calculate proportional price based on shares
+            const shareRatio = claim.claimed_quantity / totalShares;
+            const claimPrice = itemPrice * shareRatio;
+
+            itemsForFinalize.push({
+              id: `${item.id}_${claim.user_id}`,
+              total_price: claimPrice,
+              claimed_by: claim.user_id,
+            });
+          }
+        }
+      }
+
+      // Calculate adjusted tax based on available items (same logic as receipt summary)
+      const availableItems = receiptItems.filter(
+        (item) => item.available !== false
+      );
+      const availableSubtotal = availableItems.reduce(
+        (sum, item) => sum + Number(item.total_price || 0),
+        0
+      );
+      const originalSubtotal = Number(receipt.subtotal || 0);
+      const availableRatio =
+        originalSubtotal > 0 ? availableSubtotal / originalSubtotal : 1;
+      const adjustedTax = Number(receipt.tax_total || 0) * availableRatio;
+
+      console.log("Tax calculation debug:");
+      console.log("- Original tax:", Number(receipt.tax_total || 0));
+      console.log("- Available subtotal:", availableSubtotal);
+      console.log("- Original subtotal:", originalSubtotal);
+      console.log("- Available ratio:", availableRatio);
+      console.log("- Adjusted tax:", adjustedTax);
+
       const result = finalizeShares(
         itemsForFinalize,
-        Number(receipt.tax_total || 0),
+        adjustedTax,
         Number(receipt.tip_total || 0)
       );
       // store finalized_shares in receipt
@@ -170,105 +250,279 @@ export default function GroupPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-xl font-bold">Group</h1>
-          <Link href="/" className="text-sky-600">
-            Back
-          </Link>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50">
+      {/* Header */}
+      <div className="bg-white shadow-sm border-b">
+        <div className="max-w-6xl mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Link href="/" className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-green-600 rounded-lg flex items-center justify-center">
+                  <span className="text-white font-bold text-lg">S</span>
+                </div>
+                <div>
+                  <h1 className="text-xl font-bold text-gray-900">SplitNice</h1>
+                  <p className="text-xs text-gray-500">
+                    Smart Receipt Splitter
+                  </p>
+                </div>
+              </Link>
+              {group && (
+                <div className="ml-4 pl-4 border-l border-gray-200">
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    {group.name}
+                  </h2>
+                  <p className="text-sm text-gray-500">Group Dashboard</p>
+                </div>
+              )}
+            </div>
+            <Link
+              href="/"
+              className="px-4 py-2 text-gray-600 hover:text-gray-800 text-sm font-medium"
+            >
+              ← Back to Home
+            </Link>
+          </div>
         </div>
+      </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="md:col-span-2 space-y-4">
+      <div className="max-w-6xl mx-auto px-4 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-2 space-y-6">
             <ReceiptUpload groupId={groupId} onUploaded={refresh} />
 
-            <div className="bg-white p-4 rounded shadow">
-              <h3 className="font-semibold mb-2">Receipts</h3>
-              {receipts.length === 0 && <div>No receipts yet</div>}
-              {receipts.map((r) => (
-                <div key={r.id} className="border p-2 rounded mb-2">
-                  <div className="flex justify-between">
-                    <div>
-                      <div className="font-medium">Receipt: {r.filename}</div>
-                      <div className="text-sm text-gray-600">
-                        Subtotal: ${r.subtotal} • Tax: ${r.tax_total} • Tip: $
-                        {r.tip_total}
+            <div className="bg-white p-6 rounded-2xl shadow-sm border">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <svg
+                    className="w-4 h-4 text-blue-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                    />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900">
+                  Receipts
+                </h3>
+                <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                  {receipts.length}
+                </span>
+              </div>
+              {receipts.length === 0 && (
+                <div className="text-center py-8 text-gray-500">
+                  <svg
+                    className="mx-auto w-12 h-12 text-gray-400 mb-3"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                    />
+                  </svg>
+                  <p>No receipts yet</p>
+                  <p className="text-sm">Upload your first PDF receipt above</p>
+                </div>
+              )}
+              <div className="space-y-3">
+                {receipts.map((r) => (
+                  <div
+                    key={r.id}
+                    className="border border-gray-200 p-4 rounded-xl hover:shadow-md transition-shadow"
+                  >
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <div className="font-semibold text-gray-900">
+                            {r.name || "Untitled Receipt"}
+                          </div>
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              r.status === "finalized"
+                                ? "bg-green-100 text-green-700"
+                                : "bg-yellow-100 text-yellow-700"
+                            }`}
+                          >
+                            {r.status === "finalized"
+                              ? "✓ Finalized"
+                              : "⏳ Open"}
+                          </span>
+                        </div>
+                        <div className="text-sm text-gray-600 grid grid-cols-3 gap-4">
+                          <div>
+                            Subtotal:{" "}
+                            <span className="font-medium">${r.subtotal}</span>
+                          </div>
+                          <div>
+                            Tax:{" "}
+                            <span className="font-medium">${r.tax_total}</span>
+                          </div>
+                          <div>
+                            Tip:{" "}
+                            <span className="font-medium">${r.tip_total}</span>
+                          </div>
+                        </div>
+                        <div className="text-sm text-gray-900 font-semibold mt-1">
+                          Total: ${parseFloat(r.total || 0).toFixed(2)}
+                        </div>
+                      </div>
+                      <div className="flex gap-2 ml-4">
+                        {r.status !== "finalized" &&
+                          currentUser &&
+                          (r.uploader_user_id === currentUser.id ||
+                            currentUserMembership?.role === "admin") && (
+                            <button
+                              className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                              onClick={() => finalizeReceipt(r)}
+                              disabled={loading}
+                            >
+                              Finalize
+                            </button>
+                          )}
+                        <button
+                          className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200"
+                          onClick={() => router.push(`/receipt/${r.id}`)}
+                        >
+                          Open →
+                        </button>
                       </div>
                     </div>
-                    <div className="flex gap-2">
-                      {r.status !== "finalized" &&
-                        currentUser &&
-                        (r.uploader_user_id === currentUser.id ||
-                          currentUserMembership?.role === "admin") && (
-                          <button
-                            className="px-2 py-1 bg-blue-600 text-white rounded"
-                            onClick={() => finalizeReceipt(r)}
-                            disabled={loading}
-                          >
-                            Finalize
-                          </button>
-                        )}
-                      <button
-                        className="px-2 py-1 bg-gray-200 rounded"
-                        onClick={() => router.push(`/receipt/${r.id}`)}
-                      >
-                        Open
-                      </button>
-                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
 
-          <div className="bg-white p-4 rounded shadow">
-            <div className="mb-3">
-              <div className="flex justify-between items-center mb-2">
-                <h3 className="font-semibold">Members ({members.length})</h3>
+          <div className="space-y-6">
+            {/* Room Code Card */}
+            <div className="bg-white p-6 rounded-2xl shadow-sm border">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                  <svg
+                    className="w-4 h-4 text-purple-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
+                    />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Room Code
+                </h3>
               </div>
-              <div className="p-2 bg-gray-100 rounded text-sm">
+              <div className="bg-gradient-to-r from-blue-50 to-green-50 p-4 rounded-xl">
                 <div className="flex justify-between items-center">
                   <div>
-                    <span className="text-gray-600">Room Code: </span>
-                    <span className="font-mono font-medium">{groupId}</span>
+                    <p className="text-sm text-gray-600 mb-1">
+                      Share this code with friends:
+                    </p>
+                    <span className="font-mono text-lg font-bold text-gray-900">
+                      {groupId}
+                    </span>
                   </div>
                   <button
                     onClick={() => {
                       navigator.clipboard.writeText(groupId);
                       alert("Room code copied!");
                     }}
-                    className="text-sky-600 hover:text-sky-700 text-xs"
+                    className="px-3 py-2 bg-white text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 border"
                   >
-                    Copy
+                    📋 Copy
                   </button>
                 </div>
               </div>
             </div>
-            <div className="space-y-2">
-              {members.length === 0 && (
-                <div className="text-sm text-gray-600">No members</div>
-              )}
-              {members.map((m) => (
-                <div
-                  key={m.user_id}
-                  className="flex items-center justify-between p-2 bg-gray-50 rounded"
-                >
-                  <div>
-                    <div className="font-medium">{m.display_name}</div>
-                    {m.email && (
-                      <div className="text-sm text-gray-600">{m.email}</div>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {m.role === "admin" && (
-                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
-                        Admin
-                      </span>
-                    )}
-                  </div>
+
+            {/* Members Card */}
+            <div className="bg-white p-6 rounded-2xl shadow-sm border">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                  <svg
+                    className="w-4 h-4 text-green-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                    />
+                  </svg>
                 </div>
-              ))}
+                <h3 className="text-lg font-semibold text-gray-900">Members</h3>
+                <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                  {members.length}
+                </span>
+              </div>
+              <div className="space-y-3">
+                {members.length === 0 && (
+                  <div className="text-center py-6 text-gray-500">
+                    <svg
+                      className="mx-auto w-8 h-8 text-gray-400 mb-2"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                      />
+                    </svg>
+                    <p className="text-sm">No members yet</p>
+                  </div>
+                )}
+                {members.map((m) => (
+                  <div
+                    key={m.user_id}
+                    className="flex items-center justify-between p-3 bg-gray-50 rounded-xl"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
+                        <span className="text-white text-sm font-semibold">
+                          {(m.display_name ||
+                            m.email?.split("@")[0] ||
+                            "U")[0]?.toUpperCase()}
+                        </span>
+                      </div>
+                      <div>
+                        <div className="font-medium text-gray-900">
+                          {m.display_name}
+                        </div>
+                        {m.email && (
+                          <div className="text-sm text-gray-500">{m.email}</div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {m.role === "admin" && (
+                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full font-medium">
+                          Admin
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
