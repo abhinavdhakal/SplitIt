@@ -252,7 +252,6 @@ export default function ReceiptView() {
           item_id: splittingItem.id,
           user_id: userId,
           claimed_quantity: shares, // Using shares as quantity for split items
-          claimed_amount: pricePerShare * shares, // Store the actual dollar amount
         };
 
         console.log("Creating claim:", claimData);
@@ -885,9 +884,14 @@ export default function ReceiptView() {
                               setEditingItem(null);
                             }
                           }}
-                          onBlur={(e) =>
-                            updateItem(it.id, { name: e.target.value })
-                          }
+                          onBlur={(e) => {
+                            const newName = e.target.value.trim();
+                            if (newName && newName !== it.name) {
+                              updateItem(it.id, { name: newName });
+                            } else {
+                              setEditingItem(null);
+                            }
+                          }}
                           autoFocus
                         />
                       ) : (
@@ -908,7 +912,12 @@ export default function ReceiptView() {
                             currentUser &&
                             receipt.uploader_user_id === currentUser.id && (
                               <button
-                                onClick={() => setEditingItem(it)}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  // Small delay to prevent immediate blur
+                                  setTimeout(() => setEditingItem(it), 10);
+                                }}
                                 className="text-xs text-blue-600 hover:text-blue-800"
                                 title="Click to edit item"
                               >
