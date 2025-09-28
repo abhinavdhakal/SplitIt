@@ -14,101 +14,125 @@ export default function Home() {
   const [authLoading, setAuthLoading] = useState(true);
   const [profileLoading, setProfileLoading] = useState(false);
 
-  async function createOrUpdateProfile(user) {
-    if (!user) {
-      setUserProfile(null);
-      setProfileLoading(false);
-      return;
-    }
+  const setupUserProfile = async (user) => {
+    if (!user) return;
 
     setProfileLoading(true);
-
     try {
-      // Get or create user profile
-      let { data: profile, error: fetchError } = await supabase
+      // First check if profile exists
+      const { data: profile, error: fetchError } = await supabase
         .from("user_profiles")
         .select("*")
         .eq("user_id", user.id)
         .single();
 
-      if (fetchError && fetchError.code === 'PGRST116') {
+      if (!profile && fetchError?.code === "PGRST116") {
         // Profile doesn't exist, create new one
         const displayName =
-          user.user_metadata?.display_name || user.email.split("@")[0];
+          user.user_metadata?.display_name ||
+          user.user_metadata?.name ||
+          user.email.split("@")[0];
+
+        // Use upsert to handle race conditions
         const { data: newProfile, error: createError } = await supabase
           .from("user_profiles")
-          .insert({
-            user_id: user.id,
-            display_name: displayName,
-            email: user.email,
-          })
+          .upsert(
+            {
+              user_id: user.id,
+              display_name: displayName,
+              email: user.email,
+            },
+            {
+              onConflict: "user_id",
+            }
+          )
           .select()
           .single();
-        
-        if (createError) {
-          console.error('Profile creation error:', createError);
-          setUserProfile({ display_name: displayName, email: user.email });
-        } else {
-          profile = newProfile;
-        }
-      } else if (fetchError) {
-        console.error('Profile fetch error:', fetchError);
-        setUserProfile({ display_name: user.email.split("@")[0], email: user.email });
-      }
 
-      if (profile) {
+        if (createError) {
+          console.error("Profile creation error:", createError);
+          // Set fallback profile
+          setUserProfile({
+            display_name: displayName,
+            email: user.email,
+            user_id: user.id,
+          });
+        } else {
+          setUserProfile(newProfile);
+        }
+      } else if (profile) {
+        // Profile exists, use it
         setUserProfile(profile);
+      } else {
+        // Handle other errors with fallback
+        console.error("Profile fetch error:", fetchError);
+        setUserProfile({
+          display_name: user.email.split("@")[0],
+          email: user.email,
+          user_id: user.id,
+        });
       }
     } catch (error) {
-      console.error('Profile setup error:', error);
+      console.error("Profile setup error:", error);
       // Fallback profile
-      setUserProfile({ 
-        display_name: user.email.split("@")[0], 
-        email: user.email 
+      setUserProfile({
+        display_name: user.email.split("@")[0],
+        email: user.email,
+        user_id: user.id,
       });
     } finally {
       setProfileLoading(false);
     }
-  }
+  };
 
   useEffect(() => {
     const init = async () => {
       setAuthLoading(true);
+
+      // Set timeout to prevent infinite loading
+      const timeoutId = setTimeout(() => {
+        console.warn("Auth initialization timed out");
+        setAuthLoading(false);
+        setProfileLoading(false);
+      }, 10000); // 10 second timeout
+
       try {
         const { data, error } = await supabase.auth.getUser();
         if (error) {
-          console.error('Auth check error:', error);
+          console.error("Auth check error:", error);
           setUser(null);
-        } else {
-          setUser(data.user || null);
-          if (data.user) {
-            await createOrUpdateProfile(data.user);
-            await fetchGroups(data.user);
-          }
+        } else if (data.user) {
+          setUser(data.user);
+          await setupUserProfile(data.user);
         }
       } catch (error) {
-        console.error('Init error:', error);
+        console.error("Init error:", error);
         setUser(null);
       } finally {
+        clearTimeout(timeoutId);
         setAuthLoading(false);
       }
     };
+
     init();
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state changed:', event, session?.user?.email);
-      
-      if (event === 'SIGNED_OUT' || !session) {
+      console.log("Auth state changed:", event, session?.user?.email);
+
+      if (event === "SIGNED_OUT" || !session) {
         setUser(null);
         setUserProfile(null);
         setGroups([]);
         setAuthLoading(false);
       } else if (session?.user) {
         setUser(session.user);
-        await createOrUpdateProfile(session.user);
-        await fetchGroups(session.user);
+        // Add small delay to prevent race conditions
+        setTimeout(async () => {
+          await setupUserProfile(session.user);
+          await fetchGroups(session.user);
+        }, 100);
       }
     });
 
