@@ -11,56 +11,104 @@ export default function Home() {
   const [groupName, setGroupName] = useState("");
   const [editingName, setEditingName] = useState(false);
   const [newDisplayName, setNewDisplayName] = useState("");
+  const [authLoading, setAuthLoading] = useState(true);
+  const [profileLoading, setProfileLoading] = useState(false);
 
   async function createOrUpdateProfile(user) {
-    if (!user) return;
-
-    // Get or create user profile
-    let { data: profile } = await supabase
-      .from("user_profiles")
-      .select("*")
-      .eq("user_id", user.id)
-      .single();
-
-    if (!profile) {
-      // Create new profile
-      const displayName =
-        user.user_metadata?.display_name || user.email.split("@")[0];
-      const { data: newProfile } = await supabase
-        .from("user_profiles")
-        .insert({
-          user_id: user.id,
-          display_name: displayName,
-          email: user.email,
-        })
-        .select()
-        .single();
-      profile = newProfile;
+    if (!user) {
+      setUserProfile(null);
+      setProfileLoading(false);
+      return;
     }
 
-    setUserProfile(profile);
+    setProfileLoading(true);
+
+    try {
+      // Get or create user profile
+      let { data: profile, error: fetchError } = await supabase
+        .from("user_profiles")
+        .select("*")
+        .eq("user_id", user.id)
+        .single();
+
+      if (fetchError && fetchError.code === 'PGRST116') {
+        // Profile doesn't exist, create new one
+        const displayName =
+          user.user_metadata?.display_name || user.email.split("@")[0];
+        const { data: newProfile, error: createError } = await supabase
+          .from("user_profiles")
+          .insert({
+            user_id: user.id,
+            display_name: displayName,
+            email: user.email,
+          })
+          .select()
+          .single();
+        
+        if (createError) {
+          console.error('Profile creation error:', createError);
+          setUserProfile({ display_name: displayName, email: user.email });
+        } else {
+          profile = newProfile;
+        }
+      } else if (fetchError) {
+        console.error('Profile fetch error:', fetchError);
+        setUserProfile({ display_name: user.email.split("@")[0], email: user.email });
+      }
+
+      if (profile) {
+        setUserProfile(profile);
+      }
+    } catch (error) {
+      console.error('Profile setup error:', error);
+      // Fallback profile
+      setUserProfile({ 
+        display_name: user.email.split("@")[0], 
+        email: user.email 
+      });
+    } finally {
+      setProfileLoading(false);
+    }
   }
 
   useEffect(() => {
     const init = async () => {
-      const { data } = await supabase.auth.getUser();
-      setUser(data.user || null);
-      if (data.user) {
-        await createOrUpdateProfile(data.user);
-        fetchGroups(data.user);
+      setAuthLoading(true);
+      try {
+        const { data, error } = await supabase.auth.getUser();
+        if (error) {
+          console.error('Auth check error:', error);
+          setUser(null);
+        } else {
+          setUser(data.user || null);
+          if (data.user) {
+            await createOrUpdateProfile(data.user);
+            await fetchGroups(data.user);
+          }
+        }
+      } catch (error) {
+        console.error('Init error:', error);
+        setUser(null);
+      } finally {
+        setAuthLoading(false);
       }
     };
     init();
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setUser(session?.user || null);
-      if (session?.user) {
-        await createOrUpdateProfile(session.user);
-        fetchGroups(session.user);
-      } else {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state changed:', event, session?.user?.email);
+      
+      if (event === 'SIGNED_OUT' || !session) {
+        setUser(null);
         setUserProfile(null);
+        setGroups([]);
+        setAuthLoading(false);
+      } else if (session?.user) {
+        setUser(session.user);
+        await createOrUpdateProfile(session.user);
+        await fetchGroups(session.user);
       }
     });
 
@@ -112,11 +160,22 @@ export default function Home() {
     fetchGroups(u);
   }
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 p-6 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading SplitIt...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 p-6">
       <div className="max-w-3xl mx-auto">
         <h1 className="text-2xl font-bold mb-4">
-          Receipt Splitter (Open Source MVP)
+          🧾 SplitIt - Smart Receipt Splitter
         </h1>
 
         {!user && <SignIn onLogin={() => {}} />}
@@ -164,15 +223,20 @@ export default function Home() {
                     <div>
                       Signed in as{" "}
                       <strong>
-                        {userProfile?.display_name || "Loading..."}
+                        {profileLoading ? (
+                          <span className="text-gray-500">Loading...</span>
+                        ) : (
+                          userProfile?.display_name || user?.email?.split('@')[0] || 'User'
+                        )}
                       </strong>{" "}
                       ({user.email})
                       <button
                         onClick={() => {
-                          setNewDisplayName(userProfile?.display_name || "");
+                          setNewDisplayName(userProfile?.display_name || user?.email?.split('@')[0] || "");
                           setEditingName(true);
                         }}
                         className="ml-2 text-blue-600 text-sm underline"
+                        disabled={profileLoading}
                       >
                         Edit name
                       </button>

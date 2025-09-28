@@ -38,24 +38,32 @@ export default function SignIn({ onLogin }) {
       }
     }
 
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        data: {
-          display_name: isSignUp ? name.trim() : email.split("@")[0],
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: window.location.origin,
+          data: {
+            display_name: isSignUp ? name.trim() : email.split("@")[0],
+          },
         },
-      },
-    });
+      });
 
-    setLoading(false);
-    if (error) setMsg("Error: " + error.message);
-    else
+      if (error) throw error;
+      
       setMsg(
-        `Magic link sent to your email (check spam). ${
+        `Magic link sent to ${email}! Check your email (including spam folder) and click the link to sign in. ${
           isSignUp ? "Welcome!" : "Welcome back!"
         }`
       );
-    if (onLogin) onLogin();
+      
+      if (onLogin) onLogin();
+    } catch (error) {
+      console.error('Sign in error:', error);
+      setMsg("Error: " + error.message + " Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
