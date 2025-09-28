@@ -860,7 +860,7 @@ export default function ReceiptView() {
         {receipt.finalized_shares && (
           <div className="bg-green-50 border border-green-200 p-6 rounded shadow mb-6">
             <h3 className="text-lg font-semibold mb-4 text-green-800">
-              💰 Final Expense Split
+              Final Expense Split
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {Object.entries(receipt.finalized_shares).map(
@@ -897,7 +897,7 @@ export default function ReceiptView() {
                       </div>
                       <details className="mt-2">
                         <summary className="cursor-pointer text-xs text-gray-500 hover:text-gray-700">
-                          📋 View Breakdown
+                          View Breakdown
                         </summary>
                         <div className="mt-2 text-xs space-y-1 bg-gray-50 p-2 rounded">
                           <div className="font-medium text-gray-700 mb-1">
@@ -1076,11 +1076,11 @@ export default function ReceiptView() {
             <div>
               {receipt.status === "finalized" ? (
                 <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium">
-                  ✅ Finalized
+                  Finalized
                 </span>
               ) : (
                 <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm font-medium">
-                  ⏳ Open
+                  Open
                 </span>
               )}
             </div>
@@ -1253,54 +1253,54 @@ export default function ReceiptView() {
 
                       {/* Quantity - always show and editable in edit mode */}
                       {editingItemId === it.id ? (
-                          <div className="ml-2 flex items-center gap-1">
-                            <span className="text-sm text-gray-500">×</span>
-                            <input
-                              type="number"
-                              min="1"
-                              step="1"
-                              defaultValue={it.quantity || 1}
-                              className="w-16 px-2 py-1 border rounded text-sm"
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  const newQty = parseInt(e.target.value) || 1;
-                                  updateItem(it.id, {
-                                    quantity: newQty,
-                                    unit_price: it.total_price / newQty,
-                                  });
-                                } else if (e.key === "Escape") {
-                                  setEditingItemId(null);
+                        <div className="ml-2 flex items-center gap-1">
+                          <span className="text-sm text-gray-500">×</span>
+                          <input
+                            type="number"
+                            min="1"
+                            step="1"
+                            defaultValue={it.quantity || 1}
+                            className="w-16 px-2 py-1 border rounded text-sm"
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                const newQty = parseInt(e.target.value) || 1;
+                                updateItem(it.id, {
+                                  quantity: newQty,
+                                  unit_price: it.total_price / newQty,
+                                });
+                              } else if (e.key === "Escape") {
+                                setEditingItemId(null);
+                              }
+                            }}
+                            onBlur={(e) => {
+                              // Longer delay to prevent immediate blur from button click
+                              console.log(
+                                "Quantity input blur triggered for:",
+                                it.id
+                              );
+                              setTimeout(() => {
+                                const newQty = parseInt(e.target.value) || 1;
+                                if (newQty !== (it.quantity || 1)) {
+                                  updateItem(
+                                    it.id,
+                                    {
+                                      quantity: newQty,
+                                      unit_price: it.total_price / newQty,
+                                    },
+                                    false
+                                  ); // Don't close edit mode
                                 }
-                              }}
-                              onBlur={(e) => {
-                                // Longer delay to prevent immediate blur from button click
-                                console.log(
-                                  "Quantity input blur triggered for:",
-                                  it.id
-                                );
-                                setTimeout(() => {
-                                  const newQty = parseInt(e.target.value) || 1;
-                                  if (newQty !== (it.quantity || 1)) {
-                                    updateItem(
-                                      it.id,
-                                      {
-                                        quantity: newQty,
-                                        unit_price: it.total_price / newQty,
-                                      },
-                                      false
-                                    ); // Don't close edit mode
-                                  }
-                                  // Don't auto-close on blur - let user use Enter/Escape
-                                }, 500);
-                              }}
-                              onFocus={(e) => e.target.select()}
-                            />
-                          </div>
-                        ) : (
-                          <span className="ml-2 text-gray-500">
-                            ×{it.quantity || 1}
-                          </span>
-                        )}
+                                // Don't auto-close on blur - let user use Enter/Escape
+                              }, 500);
+                            }}
+                            onFocus={(e) => e.target.select()}
+                          />
+                        </div>
+                      ) : (
+                        <span className="ml-2 text-gray-500">
+                          ×{it.quantity || 1}
+                        </span>
+                      )}
 
                       {/* Availability toggle - only for uploader in edit mode */}
                       {editingMode &&
@@ -1321,7 +1321,7 @@ export default function ReceiptView() {
                                 : "Mark as unavailable"
                             }
                           >
-                            {it.available === false ? "✓ Enable" : "✗ Disable"}
+                            {it.available === false ? "Enable" : "Disable"}
                           </button>
                         )}
                     </div>

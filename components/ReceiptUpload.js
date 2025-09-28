@@ -129,7 +129,6 @@ export default function ReceiptUpload({ groupId, onUploaded }) {
           </p>
         </div>
       </div>
-
       {/* Receipt Name Input */}
       <div className="mb-4">
         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -143,10 +142,9 @@ export default function ReceiptUpload({ groupId, onUploaded }) {
           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
         <p className="text-xs text-gray-500 mt-1">
-          💡 Name will be auto-generated from filename if left empty
+          Tip: Name will be auto-generated from filename if left empty
         </p>
       </div>
-
       {/* File Upload */}
       <div className="mb-4">
         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -173,41 +171,14 @@ export default function ReceiptUpload({ groupId, onUploaded }) {
           </p>
         )}
       </div>
-
       {/* Upload Button */}
       <button
-        onClick={uploadAndParse}
-        className="w-full px-4 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-        disabled={!file || parsing}
+        type="submit"
+        disabled={parsing || !file}
+        className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white p-3 rounded font-semibold"
       >
-        {parsing ? (
-          <>
-            <svg
-              className="animate-spin w-4 h-4"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth="4"
-              ></circle>
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-              ></path>
-            </svg>
-            Parsing & uploading...
-          </>
-        ) : (
-          <>📄 Upload & Parse Receipt</>
-        )}
-      </button>
-
+        {parsing ? "Processing..." : "Upload & Parse Receipt"}
+      </button>{" "}
       {error && (
         <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
           <p className="text-red-700 text-sm flex items-center gap-2">
@@ -226,7 +197,6 @@ export default function ReceiptUpload({ groupId, onUploaded }) {
           </p>
         </div>
       )}
-
       {preview && (
         <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <div className="flex items-center gap-2 mb-3">
@@ -288,7 +258,7 @@ export default function ReceiptUpload({ groupId, onUploaded }) {
 
           <details className="mt-2">
             <summary className="cursor-pointer font-medium text-blue-900 text-sm hover:text-blue-700">
-              🔍 View Raw PDF Text (for debugging)
+              View Raw PDF Text (for debugging)
             </summary>
             <pre className="bg-gray-100 p-3 mt-2 text-xs max-h-40 overflow-y-auto whitespace-pre-wrap rounded border">
               {preview.raw_text_sample}

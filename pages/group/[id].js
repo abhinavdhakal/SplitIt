@@ -261,7 +261,7 @@ export default function GroupPage() {
                   <span className="text-white font-bold text-lg">S</span>
                 </div>
                 <div>
-                  <h1 className="text-xl font-bold text-gray-900">SplitNice</h1>
+                  <h1 className="text-xl font-bold text-gray-900">SplitIt</h1>
                   <p className="text-xs text-gray-500">
                     Smart Receipt Splitter
                   </p>
@@ -353,9 +353,7 @@ export default function GroupPage() {
                                 : "bg-yellow-100 text-yellow-700"
                             }`}
                           >
-                            {r.status === "finalized"
-                              ? "✓ Finalized"
-                              : "⏳ Open"}
+                            {r.status === "finalized" ? "Finalized" : "Open"}
                           </span>
                         </div>
                         <div className="text-sm text-gray-600 grid grid-cols-3 gap-4">
@@ -443,7 +441,7 @@ export default function GroupPage() {
                     }}
                     className="px-3 py-2 bg-white text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 border"
                   >
-                    📋 Copy
+                    Copy
                   </button>
                 </div>
               </div>

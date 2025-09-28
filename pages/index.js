@@ -89,27 +89,38 @@ export default function Home() {
     const init = async () => {
       setAuthLoading(true);
 
-      // Set timeout to prevent infinite loading
-      const timeoutId = setTimeout(() => {
-        console.warn("Auth initialization timed out");
-        setAuthLoading(false);
-        setProfileLoading(false);
-      }, 10000); // 10 second timeout
-
       try {
-        const { data, error } = await supabase.auth.getUser();
-        if (error) {
-          console.error("Auth check error:", error);
-          setUser(null);
-        } else if (data.user) {
-          setUser(data.user);
-          await setupUserProfile(data.user);
+        // Get the current session from storage first
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession();
+
+        if (sessionError) {
+          console.error("Session check error:", sessionError);
+        }
+
+        if (session?.user) {
+          console.log("Restored session for:", session.user.email);
+          setUser(session.user);
+          await setupUserProfile(session.user);
+          await fetchGroups(session.user);
+        } else {
+          // If no session, try to get current user (in case of fresh login)
+          const { data, error } = await supabase.auth.getUser();
+          if (error) {
+            console.error("Auth check error:", error);
+            setUser(null);
+          } else if (data.user) {
+            setUser(data.user);
+            await setupUserProfile(data.user);
+            await fetchGroups(data.user);
+          }
         }
       } catch (error) {
         console.error("Init error:", error);
         setUser(null);
       } finally {
-        clearTimeout(timeoutId);
         setAuthLoading(false);
       }
     };
@@ -128,6 +139,12 @@ export default function Home() {
         setAuthLoading(false);
       } else if (session?.user) {
         setUser(session.user);
+
+        // Handle different auth events
+        if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+          console.log("Session refreshed/restored for:", session.user.email);
+        }
+
         // Add small delay to prevent race conditions
         setTimeout(async () => {
           await setupUserProfile(session.user);
@@ -136,7 +153,21 @@ export default function Home() {
       }
     });
 
-    return () => subscription.unsubscribe();
+    // Set up periodic session refresh to ensure long-term persistence
+    const refreshInterval = setInterval(async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session) {
+        // Refresh the session token proactively
+        await supabase.auth.refreshSession();
+      }
+    }, 30 * 60 * 1000); // Refresh every 30 minutes
+
+    return () => {
+      subscription.unsubscribe();
+      clearInterval(refreshInterval);
+    };
   }, []);
 
   async function fetchGroups(currentUser) {
@@ -206,7 +237,7 @@ export default function Home() {
                 <span className="text-white font-bold text-lg">S</span>
               </div>
               <div>
-                <h1 className="text-xl font-bold text-gray-900">SplitNice</h1>
+                <h1 className="text-xl font-bold text-gray-900">SplitIt</h1>
                 <p className="text-xs text-gray-500">Smart Receipt Splitter</p>
               </div>
             </div>
@@ -233,7 +264,7 @@ export default function Home() {
             <div className="text-center py-16">
               <div className="inline-flex items-center gap-3 mb-6">
                 <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-green-600 rounded-2xl flex items-center justify-center">
-                  <span className="text-white font-bold text-2xl">📱</span>
+                  <span className="text-white font-bold text-2xl">S</span>
                 </div>
               </div>
               <h1 className="text-5xl font-bold text-gray-900 mb-4">
@@ -331,7 +362,7 @@ export default function Home() {
                       user?.email?.split("@")[0] ||
                       "User"
                     )}
-                    ! 👋
+                    !
                   </h2>
                   <p className="text-gray-600 mt-1">
                     Manage your groups and split receipts easily

@@ -46,6 +46,7 @@ export default function SignIn({ onLogin }) {
           data: {
             display_name: isSignUp ? name.trim() : email.split("@")[0],
           },
+          shouldCreateUser: isSignUp,
         },
       });
 
