@@ -173,7 +173,8 @@ export default function ReceiptUpload({ groupId, onUploaded }) {
       </div>
       {/* Upload Button */}
       <button
-        type="submit"
+        type="button"
+        onClick={uploadAndParse}
         disabled={parsing || !file}
         className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white p-3 rounded font-semibold"
       >
