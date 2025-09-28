@@ -12,13 +12,33 @@ export default function GroupPage() {
   const [receipts, setReceipts] = useState([]);
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [currentUserMembership, setCurrentUserMembership] = useState(null);
 
   useEffect(() => {
     if (!groupId) return;
+    getCurrentUser();
     fetchGroup();
     fetchReceipts();
     fetchMembers();
   }, [groupId]);
+
+  async function getCurrentUser() {
+    const { data } = await supabase.auth.getUser();
+    if (data.user) {
+      setCurrentUser(data.user);
+
+      // Get user's membership in this group
+      const { data: membership } = await supabase
+        .from("group_members")
+        .select("role")
+        .eq("group_id", groupId)
+        .eq("user_id", data.user.id)
+        .single();
+
+      setCurrentUserMembership(membership);
+    }
+  }
 
   async function fetchGroup() {
     const { data } = await supabase
@@ -90,43 +110,63 @@ export default function GroupPage() {
   }
 
   async function finalizeReceipt(receipt) {
+    if (!currentUser) {
+      alert("You must be logged in to finalize receipts.");
+      return;
+    }
+
+    // Check permissions: only receipt uploader or group admin can finalize
+    const isUploader = receipt.uploader_user_id === currentUser.id;
+    const isGroupAdmin = currentUserMembership?.role === "admin";
+
+    if (!isUploader && !isGroupAdmin) {
+      alert("Only the receipt uploader or group admin can finalize receipts.");
+      return;
+    }
+
     setLoading(true);
-    // load items for receipt
-    const { data: items } = await supabase
-      .from("items")
-      .select("*")
-      .eq("receipt_id", receipt.id);
-    // build items format expected
-    const itemsForFinalize = items.map((it) => ({
-      id: it.id,
-      total_price: Number(it.total_price),
-      claimed_by: it.claimed_by,
-    }));
-    const result = finalizeShares(
-      itemsForFinalize,
-      Number(receipt.tax_total || 0),
-      Number(receipt.tip_total || 0)
-    );
-    // store finalized_shares in receipt
-    await supabase
-      .from("receipts")
-      .update({
-        status: "finalized",
-        finalized_shares: result.perUser,
-        finalized_at: new Date().toISOString(),
-      })
-      .eq("id", receipt.id);
-    // Log
-    await supabase.from("logs").insert([
-      {
-        receipt_id: receipt.id,
-        user_id: (await supabase.auth.getUser()).data.user?.id,
-        action: "finalize",
-        details: { perUser: result.perUser },
-      },
-    ]);
-    setLoading(false);
-    refresh();
+    try {
+      // load items for receipt
+      const { data: items } = await supabase
+        .from("items")
+        .select("*")
+        .eq("receipt_id", receipt.id);
+      // build items format expected
+      const itemsForFinalize = items.map((it) => ({
+        id: it.id,
+        total_price: Number(it.total_price),
+        claimed_by: it.claimed_by,
+      }));
+      const result = finalizeShares(
+        itemsForFinalize,
+        Number(receipt.tax_total || 0),
+        Number(receipt.tip_total || 0)
+      );
+      // store finalized_shares in receipt
+      await supabase
+        .from("receipts")
+        .update({
+          status: "finalized",
+          finalized_shares: result.perUser,
+          finalized_at: new Date().toISOString(),
+        })
+        .eq("id", receipt.id);
+      // Log
+      await supabase.from("logs").insert([
+        {
+          receipt_id: receipt.id,
+          user_id: currentUser.id,
+          action: "finalize",
+          details: { perUser: result.perUser },
+        },
+      ]);
+      refresh();
+    } catch (error) {
+      console.error("Error finalizing receipt:", error);
+      alert("Error finalizing receipt. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -157,15 +197,18 @@ export default function GroupPage() {
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      {r.status !== "finalized" && (
-                        <button
-                          className="px-2 py-1 bg-blue-600 text-white rounded"
-                          onClick={() => finalizeReceipt(r)}
-                          disabled={loading}
-                        >
-                          Finalize
-                        </button>
-                      )}
+                      {r.status !== "finalized" &&
+                        currentUser &&
+                        (r.uploader_user_id === currentUser.id ||
+                          currentUserMembership?.role === "admin") && (
+                          <button
+                            className="px-2 py-1 bg-blue-600 text-white rounded"
+                            onClick={() => finalizeReceipt(r)}
+                            disabled={loading}
+                          >
+                            Finalize
+                          </button>
+                        )}
                       <button
                         className="px-2 py-1 bg-gray-200 rounded"
                         onClick={() => router.push(`/receipt/${r.id}`)}

@@ -53,10 +53,19 @@ export default function ReceiptView() {
     if (items.length === 0) return;
 
     const itemIds = items.map((item) => item.id);
-    const { data: claims } = await supabase
+    console.log("Fetching claims for item IDs:", itemIds);
+
+    const { data: claims, error } = await supabase
       .from("item_claims")
       .select("*")
       .in("item_id", itemIds);
+
+    if (error) {
+      console.error("Error fetching claims:", error);
+      return;
+    }
+
+    console.log("Fetched claims:", claims);
 
     // Group claims by item_id
     const claimsMap = {};
@@ -67,6 +76,7 @@ export default function ReceiptView() {
       claimsMap[claim.item_id].push(claim);
     });
 
+    console.log("Claims map:", claimsMap);
     setItemClaims(claimsMap);
   }
 
@@ -212,6 +222,11 @@ export default function ReceiptView() {
       return;
     }
 
+    console.log("=== APPLY SPLIT DEBUG ===");
+    console.log("Splitting item:", splittingItem);
+    console.log("Split shares:", splitShares);
+    console.log("Total shares:", totalShares);
+
     // Confirm the split
     const sharesList = Object.entries(splitShares)
       .map(([userId, shares]) => {
@@ -243,13 +258,29 @@ export default function ReceiptView() {
       // Create new claims based on split
       const pricePerShare = splittingItem.total_price / totalShares;
 
+      console.log("Price per share:", pricePerShare);
+
       for (const [userId, shares] of Object.entries(splitShares)) {
-        await supabase.from("item_claims").insert({
+        const claimData = {
           item_id: splittingItem.id,
           user_id: userId,
           claimed_quantity: shares, // Using shares as quantity for split items
           claimed_amount: pricePerShare * shares, // Store the actual dollar amount
-        });
+        };
+
+        console.log("Creating claim:", claimData);
+
+        const { data, error } = await supabase
+          .from("item_claims")
+          .insert(claimData)
+          .select();
+
+        if (error) {
+          console.error("Error creating claim:", error);
+          throw error;
+        }
+
+        console.log("Created claim:", data);
       }
 
       // Log the split action
@@ -270,7 +301,13 @@ export default function ReceiptView() {
       // Reset state and refresh
       setSplittingItem(null);
       setSplitShares({});
-      fetchItemClaims();
+      console.log("Refreshing item claims...");
+      await fetchItemClaims();
+
+      // Give state a moment to update and then log
+      setTimeout(() => {
+        console.log("Item claims after split (delayed):", itemClaims);
+      }, 100);
     } catch (error) {
       console.error("Error applying split:", error);
       alert("Error splitting item. Please try again.");

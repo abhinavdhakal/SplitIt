@@ -15,10 +15,37 @@ export async function extractTextFromPdf(arrayBuffer) {
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const textContent = await page.getTextContent();
-    const pageText = textContent.items.map((item) => item.str).join(" ");
-    fullText += pageText + "\n";
+
+    // Better text reconstruction to preserve line structure
+    const pageLines = [];
+    let currentLine = "";
+    let lastY = null;
+
+    for (const item of textContent.items) {
+      // If Y position changed significantly, it's a new line
+      if (lastY !== null && Math.abs(item.transform[5] - lastY) > 5) {
+        if (currentLine.trim()) {
+          pageLines.push(currentLine.trim());
+        }
+        currentLine = item.str;
+      } else {
+        currentLine += item.str;
+      }
+      lastY = item.transform[5];
+    }
+
+    // Don't forget the last line
+    if (currentLine.trim()) {
+      pageLines.push(currentLine.trim());
+    }
+
+    fullText += pageLines.join("\n") + "\n";
   }
 
+  console.log("=== PDF TEXT EXTRACTION ===");
+  console.log("Extracted text length:", fullText.length);
+  console.log("Number of lines:", fullText.split("\n").length);
+  
   return fullText;
 }
 
@@ -26,9 +53,10 @@ export async function extractTextFromPdf(arrayBuffer) {
  * SUPER SIMPLE PARSER: Just look for the most basic patterns
  */
 export function parseReceiptText(text) {
-  console.log("=== SIMPLE PARSER STARTING ===");
+  console.log("=== PDF PARSER STARTING ===");
   console.log("Text length:", text.length);
-  console.log("First 300 chars:", text.slice(0, 300));
+  console.log("First 500 chars:", text.slice(0, 500));
+  console.log("Last 300 chars:", text.slice(-300));
 
   const items = [];
   let subtotal = null;
@@ -70,50 +98,104 @@ export function parseReceiptText(text) {
   console.log("Strategy 1: Walmart format with status words");
 
   // Try to split the text into lines first and look for patterns
-  const lines = cleanText.split(/\n+/);
+  const lines = text.split(/\n+/);
   console.log("Number of lines:", lines.length);
 
+  // Debug: show first few lines
+  console.log("First 10 lines:");
+  lines.slice(0, 10).forEach((line, i) => {
+    console.log(`Line ${i + 1}: "${line}"`);
+  });
+
   // Look for lines with the Walmart pattern
-  for (let line of lines) {
-    line = line.trim();
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+    let line = lines[lineIndex].trim();
     if (!line || line.length < 10) continue;
 
-    // Match: ItemName Status Qty N $Price
+    console.log(
+      `\n--- Processing Line ${lineIndex + 1}: "${line.substring(
+        0,
+        80
+      )}..." ---`
+    );
+
+    // Multiple patterns to try:
+
+    // Pattern 1: ItemName Status Qty N $Price
     const walmartMatch = line.match(
       /^(.+?)\s+(Shopped|Unavailable|Available)\s+Qty\s+(\d+)\s+\$([0-9]+\.[0-9]{2})/i
     );
 
-    if (walmartMatch) {
-      let name = walmartMatch[1].trim();
-      const status = walmartMatch[2];
-      const qty = parseInt(walmartMatch[3]);
-      const price = parseFloat(walmartMatch[4]);
+    // Pattern 2: ItemName Qty N $Price (without status)
+    const simpleMatch = line.match(
+      /^(.+?)\s+Qty\s+(\d+)\s+\$([0-9]+\.[0-9]{2})/i
+    );
 
-      // Clean up name - sometimes it gets cut off at the beginning
-      // Remove any leading numbers, spaces, or special chars that aren't part of the name
-      name = name.replace(/^[\d\s\-_.,]*/, "");
+    // Pattern 3: $Price at the end with Qty somewhere
+    const priceEndMatch = line.match(
+      /^(.+?)\s+.*Qty\s+(\d+).*\$([0-9]+\.[0-9]{2})$/i
+    );
+
+    let matchResult = null;
+    let patternUsed = "";
+
+    if (walmartMatch) {
+      matchResult = {
+        name: walmartMatch[1].trim(),
+        qty: parseInt(walmartMatch[3]),
+        price: parseFloat(walmartMatch[4]),
+        status: walmartMatch[2],
+      };
+      patternUsed = "Walmart (with status)";
+    } else if (simpleMatch) {
+      matchResult = {
+        name: simpleMatch[1].trim(),
+        qty: parseInt(simpleMatch[2]),
+        price: parseFloat(simpleMatch[3]),
+        status: "unknown",
+      };
+      patternUsed = "Simple (no status)";
+    } else if (priceEndMatch) {
+      matchResult = {
+        name: priceEndMatch[1].trim(),
+        qty: parseInt(priceEndMatch[2]),
+        price: parseFloat(priceEndMatch[3]),
+        status: "unknown",
+      };
+      patternUsed = "Price at end";
+    }
+
+    if (matchResult) {
+      let name = matchResult.name;
+
+      // Clean up name - remove leading junk
+      name = name.replace(/^[\d\s\-_.,#]*/, "");
       name = name.replace(/\s+/g, " ").trim();
 
-      console.log("🎯 Walmart line match:", {
+      console.log(`🎯 ${patternUsed} match:`, {
         originalLine: line.substring(0, 100),
-        name,
-        status,
-        qty,
-        price,
+        cleanedName: name,
+        qty: matchResult.qty,
+        price: matchResult.price,
+        status: matchResult.status,
       });
 
       if (
         name &&
         name.length >= 3 &&
-        !/(total|tax|tip|subtotal|fee|order|charge)/i.test(name)
+        !/(total|tax|tip|subtotal|fee|order|charge|delivery|pickup)/i.test(name)
       ) {
         items.push({
           name: name,
-          quantity: qty,
-          unit_price: price,
-          total_price: price,
+          quantity: matchResult.qty,
+          unit_price: matchResult.price / matchResult.qty,
+          total_price: matchResult.price,
         });
-        console.log("✅ Added item:", name, `$${price}`);
+        console.log(
+          `✅ Added item: "${name}" Qty:${matchResult.qty} $${matchResult.price}`
+        );
+      } else {
+        console.log(`❌ Rejected: name too short or contains exclusions`);
       }
     }
   }
