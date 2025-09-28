@@ -14,6 +14,9 @@ export default function ReceiptView() {
   const [itemClaims, setItemClaims] = useState({});
   const [splittingItem, setSplittingItem] = useState(null);
   const [splitShares, setSplitShares] = useState({});
+  const [editingMode, setEditingMode] = useState(false);
+  const [editingItem, setEditingItem] = useState(null);
+  const [editingTip, setEditingTip] = useState(false);
 
   useEffect(() => {
     if (!receiptId) return;
@@ -181,6 +184,8 @@ export default function ReceiptView() {
   }
 
   function getAvailableQuantity(item) {
+    // If item is marked as unavailable, return 0
+    if (item.available === false) return 0;
     return item.quantity - getTotalClaimedQuantity(item.id);
   }
 
@@ -404,6 +409,12 @@ export default function ReceiptView() {
       const itemsForFinalize = [];
 
       for (const item of receiptItems) {
+        // Skip unavailable items from finalization
+        if (item.available === false) {
+          console.log(`Skipping unavailable item: ${item.name}`);
+          continue;
+        }
+
         const claims = itemClaims[item.id] || [];
 
         if (claims.length === 0) {
@@ -553,6 +564,119 @@ export default function ReceiptView() {
     }
   }
 
+  // New editing functions
+  async function toggleItemAvailability(itemId, currentAvailability) {
+    if (!currentUser || receipt.uploader_user_id !== currentUser.id) {
+      alert("Only the receipt uploader can toggle item availability.");
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("items")
+        .update({ available: !currentAvailability })
+        .eq("id", itemId);
+
+      if (error) throw error;
+
+      // Log the action
+      await supabase.from("logs").insert([
+        {
+          receipt_id: receiptId,
+          user_id: currentUser.id,
+          action: "toggle_item_availability",
+          details: {
+            itemId,
+            from: currentAvailability,
+            to: !currentAvailability,
+          },
+        },
+      ]);
+
+      fetchItems(); // Refresh items
+    } catch (error) {
+      console.error("Error toggling item availability:", error);
+      alert("Error updating item. Please try again.");
+    }
+  }
+
+  async function updateItem(itemId, updates) {
+    if (!currentUser || receipt.uploader_user_id !== currentUser.id) {
+      alert("Only the receipt uploader can edit items.");
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("items")
+        .update(updates)
+        .eq("id", itemId);
+
+      if (error) throw error;
+
+      // Log the action
+      await supabase.from("logs").insert([
+        {
+          receipt_id: receiptId,
+          user_id: currentUser.id,
+          action: "edit_item",
+          details: { itemId, updates },
+        },
+      ]);
+
+      fetchItems(); // Refresh items
+      setEditingItem(null); // Close editing mode
+    } catch (error) {
+      console.error("Error updating item:", error);
+      alert("Error updating item. Please try again.");
+    }
+  }
+
+  async function updateReceiptTip(newTip) {
+    if (!currentUser || receipt.uploader_user_id !== currentUser.id) {
+      alert("Only the receipt uploader can edit the tip.");
+      return;
+    }
+
+    try {
+      const tipAmount = parseFloat(newTip);
+      if (isNaN(tipAmount) || tipAmount < 0) {
+        alert("Please enter a valid tip amount.");
+        return;
+      }
+
+      // Recalculate total
+      const newTotal =
+        (receipt.subtotal || 0) + (receipt.tax_total || 0) + tipAmount;
+
+      const { error } = await supabase
+        .from("receipts")
+        .update({
+          tip_total: tipAmount,
+          total: newTotal,
+        })
+        .eq("id", receiptId);
+
+      if (error) throw error;
+
+      // Log the action
+      await supabase.from("logs").insert([
+        {
+          receipt_id: receiptId,
+          user_id: currentUser.id,
+          action: "edit_tip",
+          details: { from: receipt.tip_total, to: tipAmount },
+        },
+      ]);
+
+      fetchReceipt(); // Refresh receipt
+      setEditingTip(false); // Close editing mode
+    } catch (error) {
+      console.error("Error updating tip:", error);
+      alert("Error updating tip. Please try again.");
+    }
+  }
+
   if (!receipt) return <div className="p-6">Loading...</div>;
 
   return (
@@ -571,6 +695,22 @@ export default function ReceiptView() {
             )}
           </div>
           <div className="flex items-center gap-3">
+            {/* Edit mode toggle - only show to uploader for open receipts */}
+            {currentUser &&
+              receipt.uploader_user_id === currentUser.id &&
+              receipt.status !== "finalized" && (
+                <button
+                  onClick={() => setEditingMode(!editingMode)}
+                  className={`px-3 py-2 text-sm rounded hover:bg-purple-700 transition-colors flex items-center gap-1 ${
+                    editingMode
+                      ? "bg-purple-600 text-white"
+                      : "bg-purple-100 text-purple-700 hover:bg-purple-200"
+                  }`}
+                  title="Edit receipt items and amounts"
+                >
+                  ✏️ {editingMode ? "Exit Edit" : "Edit"}
+                </button>
+              )}
             {/* Finalize button - only show to uploader for open receipts */}
             {currentUser &&
               receipt.uploader_user_id === currentUser.id &&
@@ -673,8 +813,44 @@ export default function ReceiptView() {
                 <div>
                   Tax: <span className="font-medium">${receipt.tax_total}</span>
                 </div>
-                <div>
-                  Tip: <span className="font-medium">${receipt.tip_total}</span>
+                <div className="flex items-center gap-2">
+                  <span>Tip:</span>
+                  {editingTip && editingMode ? (
+                    <div className="flex items-center gap-2">
+                      <span>$</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        defaultValue={receipt.tip_total}
+                        className="w-20 px-2 py-1 border rounded text-sm"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            updateReceiptTip(e.target.value);
+                          } else if (e.key === "Escape") {
+                            setEditingTip(false);
+                          }
+                        }}
+                        autoFocus
+                        onBlur={(e) => updateReceiptTip(e.target.value)}
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">${receipt.tip_total}</span>
+                      {editingMode &&
+                        currentUser &&
+                        receipt.uploader_user_id === currentUser.id && (
+                          <button
+                            onClick={() => setEditingTip(true)}
+                            className="text-xs text-blue-600 hover:text-blue-800"
+                            title="Click to edit tip"
+                          >
+                            ✏️
+                          </button>
+                        )}
+                    </div>
+                  )}
                 </div>
                 <div className="border-t pt-1 font-semibold">
                   Total: ${receipt.total}
@@ -702,7 +878,9 @@ export default function ReceiptView() {
               <div
                 key={it.id}
                 className={`border rounded-lg p-4 transition-colors ${
-                  getTotalClaimedQuantity(it.id) > 0
+                  it.available === false
+                    ? "border-red-200 bg-red-50 opacity-60" // Gray out unavailable items
+                    : getTotalClaimedQuantity(it.id) > 0
                     ? getTotalClaimedQuantity(it.id) >= it.quantity
                       ? "border-green-200 bg-green-50"
                       : "border-yellow-200 bg-yellow-50"
@@ -712,26 +890,133 @@ export default function ReceiptView() {
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
+                      {/* Status indicator */}
                       <div
                         className={`w-3 h-3 rounded-full ${
-                          getTotalClaimedQuantity(it.id) > 0
+                          it.available === false
+                            ? "bg-red-500" // Red for unavailable
+                            : getTotalClaimedQuantity(it.id) > 0
                             ? getTotalClaimedQuantity(it.id) >= it.quantity
                               ? "bg-green-500"
                               : "bg-yellow-500"
                             : "bg-gray-300"
                         }`}
                       ></div>
-                      <div className="font-medium text-gray-900">{it.name}</div>
+
+                      {/* Item name with editing capability */}
+                      {editingItem?.id === it.id ? (
+                        <input
+                          type="text"
+                          defaultValue={it.name}
+                          className="font-medium text-gray-900 bg-white border rounded px-2 py-1 flex-1"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              updateItem(it.id, { name: e.target.value });
+                            } else if (e.key === "Escape") {
+                              setEditingItem(null);
+                            }
+                          }}
+                          onBlur={(e) =>
+                            updateItem(it.id, { name: e.target.value })
+                          }
+                          autoFocus
+                        />
+                      ) : (
+                        <div
+                          className={`font-medium ${
+                            it.available === false
+                              ? "text-red-600 line-through"
+                              : "text-gray-900"
+                          } flex items-center gap-2`}
+                        >
+                          {it.name}
+                          {it.available === false && (
+                            <span className="text-xs text-red-600 bg-red-100 px-2 py-1 rounded">
+                              UNAVAILABLE
+                            </span>
+                          )}
+                          {editingMode &&
+                            currentUser &&
+                            receipt.uploader_user_id === currentUser.id && (
+                              <button
+                                onClick={() => setEditingItem(it)}
+                                className="text-xs text-blue-600 hover:text-blue-800"
+                                title="Click to edit item"
+                              >
+                                ✏️
+                              </button>
+                            )}
+                        </div>
+                      )}
                     </div>
-                    <div className="ml-5 mt-1">
-                      <span className="text-lg font-semibold text-gray-900">
-                        ${it.total_price}
-                      </span>
+                    <div className="ml-5 mt-1 flex items-center gap-2">
+                      {editingItem?.id === it.id ? (
+                        <div className="flex items-center gap-2">
+                          <span>$</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            defaultValue={it.total_price}
+                            className="w-20 px-2 py-1 border rounded text-sm"
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                updateItem(it.id, {
+                                  total_price: parseFloat(e.target.value),
+                                  unit_price:
+                                    parseFloat(e.target.value) / it.quantity,
+                                });
+                              }
+                            }}
+                            onBlur={(e) =>
+                              updateItem(it.id, {
+                                total_price: parseFloat(e.target.value),
+                                unit_price:
+                                  parseFloat(e.target.value) / it.quantity,
+                              })
+                            }
+                          />
+                        </div>
+                      ) : (
+                        <span
+                          className={`text-lg font-semibold ${
+                            it.available === false
+                              ? "text-red-600 line-through"
+                              : "text-gray-900"
+                          }`}
+                        >
+                          ${it.total_price}
+                        </span>
+                      )}
+
                       {it.quantity && it.quantity > 1 && (
                         <span className="ml-2 text-sm text-gray-500">
                           ×{it.quantity}
                         </span>
                       )}
+
+                      {/* Availability toggle - only for uploader in edit mode */}
+                      {editingMode &&
+                        currentUser &&
+                        receipt.uploader_user_id === currentUser.id && (
+                          <button
+                            onClick={() =>
+                              toggleItemAvailability(it.id, it.available)
+                            }
+                            className={`text-xs px-2 py-1 rounded ${
+                              it.available === false
+                                ? "bg-green-100 text-green-700 hover:bg-green-200"
+                                : "bg-red-100 text-red-700 hover:bg-red-200"
+                            }`}
+                            title={
+                              it.available === false
+                                ? "Mark as available"
+                                : "Mark as unavailable"
+                            }
+                          >
+                            {it.available === false ? "✓ Enable" : "✗ Disable"}
+                          </button>
+                        )}
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-2">
@@ -868,9 +1153,16 @@ export default function ReceiptView() {
                           {/* Split button for any item */}
                           <button
                             onClick={() => startSplitting(it)}
-                            className="w-full px-3 py-1 bg-orange-500 text-white text-sm rounded hover:bg-orange-600 transition-colors"
+                            className="w-full px-3 py-1 bg-orange-500 text-white text-sm rounded hover:bg-orange-600 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
                             disabled={
-                              receipt.status === "finalized" || !currentUser
+                              receipt.status === "finalized" ||
+                              !currentUser ||
+                              it.available === false
+                            }
+                            title={
+                              it.available === false
+                                ? "Item is unavailable"
+                                : "Split this item with others"
                             }
                           >
                             🍽️ Split Item
@@ -894,7 +1186,8 @@ export default function ReceiptView() {
                                   disabled={
                                     receipt.status === "finalized" ||
                                     !currentUser ||
-                                    getMyClaimedQuantity(it.id) === 0
+                                    getMyClaimedQuantity(it.id) === 0 ||
+                                    it.available === false
                                   }
                                 >
                                   −
@@ -914,7 +1207,8 @@ export default function ReceiptView() {
                                   disabled={
                                     receipt.status === "finalized" ||
                                     !currentUser ||
-                                    getAvailableQuantity(it) === 0
+                                    getAvailableQuantity(it) === 0 ||
+                                    it.available === false
                                   }
                                 >
                                   +
@@ -944,7 +1238,8 @@ export default function ReceiptView() {
                                   className="px-3 py-1 bg-green-500 text-white text-sm rounded hover:bg-green-600 transition-colors"
                                   disabled={
                                     receipt.status === "finalized" ||
-                                    !currentUser
+                                    !currentUser ||
+                                    it.available === false
                                   }
                                 >
                                   Claim

@@ -83,6 +83,23 @@ export function parseReceiptText(text) {
     console.log("✅ Tax:", tax_total);
   }
 
+  // Find tip - multiple patterns
+  const tipPatterns = [
+    /tip[:\s]*\$?([0-9]+\.[0-9]{2})/i,
+    /driver['\s]*s?\s*tip[:\s]*\$?([0-9]+\.[0-9]{2})/i,
+    /delivery\s*tip[:\s]*\$?([0-9]+\.[0-9]{2})/i,
+    /gratuity[:\s]*\$?([0-9]+\.[0-9]{2})/i,
+  ];
+
+  for (const pattern of tipPatterns) {
+    const tipMatch = cleanText.match(pattern);
+    if (tipMatch) {
+      tip_total = parseFloat(tipMatch[1]);
+      console.log("✅ Tip:", tip_total, "- found with pattern:", pattern);
+      break;
+    }
+  }
+
   // Find total
   const totalMatch = cleanText.match(
     /(?:^|\s)total[:\s]*\$?([0-9]+\.[0-9]{2})/i
@@ -190,6 +207,8 @@ export function parseReceiptText(text) {
           quantity: matchResult.qty,
           unit_price: matchResult.price / matchResult.qty,
           total_price: matchResult.price,
+          status: matchResult.status,
+          available: matchResult.status !== "Unavailable", // Mark unavailable items as false
         });
         console.log(
           `✅ Added item: "${name}" Qty:${matchResult.qty} $${matchResult.price}`

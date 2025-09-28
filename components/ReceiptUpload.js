@@ -72,6 +72,8 @@ export default function ReceiptUpload({ groupId, onUploaded }) {
             unit_price: it.unit_price,
             total_price: it.total_price,
             claimed_by: null,
+            status: it.status || "Available",
+            available: it.available !== false, // Default to true unless explicitly false
           },
         ]);
       }
