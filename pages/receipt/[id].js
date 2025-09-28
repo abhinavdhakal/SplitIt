@@ -133,15 +133,6 @@ export default function ReceiptView() {
       });
     }
 
-    await supabase.from("logs").insert([
-      {
-        receipt_id: receiptId,
-        user_id: currentUser.id,
-        action: "claim_quantity",
-        details: { itemId, quantity },
-      },
-    ]);
-
     fetchItemClaims();
   }
 
@@ -153,15 +144,6 @@ export default function ReceiptView() {
       .delete()
       .eq("item_id", itemId)
       .eq("user_id", currentUser.id);
-
-    await supabase.from("logs").insert([
-      {
-        receipt_id: receiptId,
-        user_id: currentUser.id,
-        action: "unclaim_item",
-        details: { itemId },
-      },
-    ]);
 
     fetchItemClaims();
   }
@@ -288,20 +270,7 @@ export default function ReceiptView() {
         console.log("Created claim:", data);
       }
 
-      // Log the split action
-      await supabase.from("logs").insert([
-        {
-          receipt_id: receiptId,
-          user_id: currentUser.id,
-          action: "split_item",
-          details: {
-            itemId: splittingItem.id,
-            itemName: splittingItem.name,
-            splitShares: splitShares,
-            totalShares: totalShares,
-          },
-        },
-      ]);
+      // Note: Split applied successfully
 
       // Reset state and refresh
       setSplittingItem(null);
@@ -966,15 +935,27 @@ export default function ReceiptView() {
                                   unit_price:
                                     parseFloat(e.target.value) / it.quantity,
                                 });
+                              } else if (e.key === "Escape") {
+                                setEditingItem(null);
                               }
                             }}
-                            onBlur={(e) =>
-                              updateItem(it.id, {
-                                total_price: parseFloat(e.target.value),
-                                unit_price:
-                                  parseFloat(e.target.value) / it.quantity,
-                              })
-                            }
+                            onBlur={(e) => {
+                              // Only update if the value actually changed
+                              const newValue = parseFloat(e.target.value);
+                              if (
+                                !isNaN(newValue) &&
+                                newValue !== it.total_price
+                              ) {
+                                updateItem(it.id, {
+                                  total_price: newValue,
+                                  unit_price: newValue / it.quantity,
+                                });
+                              } else {
+                                setEditingItem(null);
+                              }
+                            }}
+                            autoFocus
+                            onFocus={(e) => e.target.select()}
                           />
                         </div>
                       ) : (
@@ -989,9 +970,44 @@ export default function ReceiptView() {
                         </span>
                       )}
 
-                      {it.quantity && it.quantity > 1 && (
+                      {/* Quantity - always show and editable in edit mode */}
+                      {editingItem?.id === it.id ? (
+                        <div className="ml-2 flex items-center gap-1">
+                          <span className="text-sm text-gray-500">×</span>
+                          <input
+                            type="number"
+                            min="1"
+                            step="1"
+                            defaultValue={it.quantity || 1}
+                            className="w-16 px-2 py-1 border rounded text-sm"
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                const newQty = parseInt(e.target.value) || 1;
+                                updateItem(it.id, {
+                                  quantity: newQty,
+                                  unit_price: it.total_price / newQty,
+                                });
+                              } else if (e.key === "Escape") {
+                                setEditingItem(null);
+                              }
+                            }}
+                            onBlur={(e) => {
+                              const newQty = parseInt(e.target.value) || 1;
+                              if (newQty !== (it.quantity || 1)) {
+                                updateItem(it.id, {
+                                  quantity: newQty,
+                                  unit_price: it.total_price / newQty,
+                                });
+                              } else {
+                                setEditingItem(null);
+                              }
+                            }}
+                            onFocus={(e) => e.target.select()}
+                          />
+                        </div>
+                      ) : (
                         <span className="ml-2 text-sm text-gray-500">
-                          ×{it.quantity}
+                          ×{it.quantity || 1}
                         </span>
                       )}
 
