@@ -393,10 +393,17 @@ export default function ReceiptView() {
             claimed_by: null,
           });
         } else {
-          // Split claimed quantities
+          // Calculate proportional shares for split items
+          const totalShares = claims.reduce(
+            (sum, claim) => sum + claim.claimed_quantity,
+            0
+          );
+          const itemPrice = Number(item.total_price);
+
           for (const claim of claims) {
-            const unitPrice = Number(item.total_price) / item.quantity;
-            const claimPrice = unitPrice * claim.claimed_quantity;
+            // Calculate proportional price based on shares
+            const shareRatio = claim.claimed_quantity / totalShares;
+            const claimPrice = itemPrice * shareRatio;
 
             itemsForFinalize.push({
               id: `${item.id}_${claim.user_id}`,
@@ -405,22 +412,9 @@ export default function ReceiptView() {
             });
           }
 
-          // Add unclaimed portion if any
-          const totalClaimed = claims.reduce(
-            (sum, claim) => sum + claim.claimed_quantity,
-            0
-          );
-          if (totalClaimed < item.quantity) {
-            const unclaimedQty = item.quantity - totalClaimed;
-            const unitPrice = Number(item.total_price) / item.quantity;
-            const unclaimedPrice = unitPrice * unclaimedQty;
+          // No need to add unclaimed portion since we're using all shares
 
-            itemsForFinalize.push({
-              id: `${item.id}_unclaimed`,
-              total_price: unclaimedPrice,
-              claimed_by: null,
-            });
-          }
+          // Note: Using proportional shares, no unclaimed portions
         }
       }
 
@@ -442,19 +436,7 @@ export default function ReceiptView() {
 
       if (error) throw error;
 
-      // Log the finalization
-      await supabase.from("logs").insert([
-        {
-          receipt_id: receipt.id,
-          user_id: currentUser.id,
-          action: "finalize_receipt",
-          details: {
-            filename: receipt.filename,
-            total_items: receiptItems.length,
-            final_shares: result.perUser,
-          },
-        },
-      ]);
+      // Finalization completed successfully
 
       // Refresh receipt data
       fetchReceipt();
@@ -761,6 +743,49 @@ export default function ReceiptView() {
                         <span>Total:</span>
                         <span>${amounts.total}</span>
                       </div>
+                      <details className="mt-2">
+                        <summary className="cursor-pointer text-xs text-gray-500 hover:text-gray-700">
+                          📋 View Breakdown
+                        </summary>
+                        <div className="mt-2 text-xs space-y-1 bg-gray-50 p-2 rounded">
+                          <div className="font-medium text-gray-700 mb-1">
+                            Items claimed:
+                          </div>
+                          {items
+                            .filter((item) => {
+                              const claims = itemClaims[item.id] || [];
+                              return claims.some(
+                                (claim) => claim.user_id === userId
+                              );
+                            })
+                            .map((item) => {
+                              const claims = itemClaims[item.id] || [];
+                              const userClaim = claims.find(
+                                (claim) => claim.user_id === userId
+                              );
+                              const totalShares = claims.reduce(
+                                (sum, claim) => sum + claim.claimed_quantity,
+                                0
+                              );
+                              const shareRatio = userClaim
+                                ? userClaim.claimed_quantity / totalShares
+                                : 0;
+                              const itemCost = item.total_price * shareRatio;
+                              return (
+                                <div
+                                  key={item.id}
+                                  className="flex justify-between"
+                                >
+                                  <span className="text-gray-600">
+                                    {item.name} ({userClaim?.claimed_quantity}/
+                                    {totalShares} shares)
+                                  </span>
+                                  <span>${itemCost.toFixed(2)}</span>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      </details>
                     </div>
                   </div>
                 )
@@ -915,8 +940,22 @@ export default function ReceiptView() {
                                 onClick={(e) => {
                                   e.preventDefault();
                                   e.stopPropagation();
+                                  console.log(
+                                    "Edit button clicked for item:",
+                                    it.id
+                                  );
+                                  console.log(
+                                    "Current editingItem:",
+                                    editingItem?.id
+                                  );
                                   // Small delay to prevent immediate blur
-                                  setTimeout(() => setEditingItem(it), 10);
+                                  setTimeout(() => {
+                                    console.log(
+                                      "Setting editingItem to:",
+                                      it.id
+                                    );
+                                    setEditingItem(it);
+                                  }, 10);
                                 }}
                                 className="text-xs text-blue-600 hover:text-blue-800"
                                 title="Click to edit item"
