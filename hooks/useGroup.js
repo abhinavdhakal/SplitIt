@@ -75,7 +75,7 @@ export function useGroup(groupId) {
     try {
       const { data } = await supabase
         .from("group_members")
-        .select("user_id, role")
+        .select("id, user_id, role, joined_at")
         .eq("group_id", groupId);
 
       if (!data || data.length === 0) {
@@ -93,8 +93,10 @@ export function useGroup(groupId) {
       const membersWithNames = data.map((m) => {
         const profile = profiles?.find((p) => p.user_id === m.user_id);
         return {
+          id: m.id,
           user_id: m.user_id,
           role: m.role,
+          joined_at: m.joined_at,
           display_name:
             profile?.display_name || `User ${m.user_id.substring(0, 8)}...`,
           email: profile?.email || "",

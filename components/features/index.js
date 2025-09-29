@@ -9,3 +9,4 @@ export { default as ProfileSection } from "./ProfileSection";
 export { default as ReceiptsList } from "./ReceiptsList";
 export { default as MembersList } from "./MembersList";
 export { default as RoomCodeCard } from "./RoomCodeCard";
+export { default as AdminControls } from "./AdminControls";

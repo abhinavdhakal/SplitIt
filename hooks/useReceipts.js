@@ -101,7 +101,7 @@ export function useReceipts(receiptId) {
 
     const { data } = await supabase
       .from("group_members")
-      .select("user_id, role")
+      .select("id, user_id, role, joined_at")
       .eq("group_id", groupId);
     setMembers(data || []);
 

@@ -38,13 +38,14 @@ export function useGroups() {
 
       if (error) throw error;
 
-      // Add current user as member
+      // Add current user as admin
       const { data: userData } = await supabase.auth.getUser();
       if (userData.user) {
         await supabase.from("group_members").insert([
           {
             group_id: data.id,
             user_id: userData.user.id,
+            role: "admin",
           },
         ]);
 

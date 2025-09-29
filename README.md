@@ -1,252 +1,129 @@
-# 🧾 SplitIt - Smart Receipt Splitter
+# SplitIt - Smart Receipt Splitter
 
-A modern web application that makes splitting receipts with friends, roommates, or colleagues effortless. Upload a PDF receipt, and SplitIt will parse the items, let everyone claim what they bought, and calculate exactly who owes what.
+Every time we did groceries as roommates, we waited weeks before splitting the receipt as it was a hassle. By then, nobody remembered who bought what. Arguments started over simple things like *“Whose milk was this?”* or *“Did I even buy cheese last month?”*.
 
-![SplitIt Demo](https://img.shields.io/badge/Status-Production%20Ready-green)
-![Next.js](https://img.shields.io/badge/Next.js-13.4.7-blue)
-![Supabase](https://img.shields.io/badge/Supabase-Backend-green)
+SplitIt fixes that. Upload the Walmart PDF receipt after each order, let everyone claim their items, and get an instant, fair breakdown. No more confusion, no more guessing.
 
-## ✨ Features
 
-### 📱 **Simple Group Management**
-- Create groups with easy-to-share room codes
-- Join groups instantly with a 6-character code
-- Invite friends without complex signup flows
-
-### 🔍 **Smart PDF Receipt Parsing**
-- Upload PDF receipts from stores like Walmart
-- Automatic text extraction and item parsing  
-- Handles quantities and prices accurately
-- Works with various receipt formats
-
-### 🎯 **Flexible Item Claiming**
-- **Quantity Claims**: Claim 2 out of 5 apples with +/- controls
-- **Item Splitting**: Split a single item (like pizza) between multiple people
-- **Fair Sharing**: Set custom share ratios (1:1, 2:1, etc.)
-- **Real-time Updates**: See claims as they happen
-
-### 💰 **Automatic Expense Calculation**
-- Proportional tax and tip distribution
-- Handles rounding to the penny
-- Clear breakdown showing who pays what
-- Export-ready expense summaries
-
-### 👥 **User-Friendly Experience**
-- Magic link authentication (no passwords!)
-- Custom display names and profiles
-- Mobile-responsive design
-- Dark/light mode support
-
-## 🚀 Quick Start
-
-### 1. **Join or Create a Group**
-```
-→ Visit the app
-→ Sign up with your email
-→ Create a new group OR join with a room code
-```
-
-### 2. **Upload a Receipt**
-```
-→ Click "Upload Receipt" in your group
-→ Select a PDF receipt from your phone/computer
-→ Wait for automatic parsing
-```
-
-### 3. **Claim Your Items**
-```
-→ Use +/- buttons for quantity items
-→ Click "Split Item" for shared items (pizza, etc.)
-→ Add people and set share amounts
-```
-
-### 4. **Finalize & Pay**
-```
-→ Group creator clicks "Finalize"
-→ Everyone sees exactly what they owe
-→ Share payment details or settle up
-```
-
-## 🛠️ Tech Stack
-
-- **Frontend**: Next.js 13, React 18, Tailwind CSS
-- **Backend**: Supabase (PostgreSQL + Auth)
-- **PDF Processing**: PDF.js for text extraction
-- **Deployment**: Netlify (recommended)
-- **Authentication**: Email magic links via Supabase
-
-## 📋 Self-Hosting Setup
-
-Want to run your own instance? Here's how:
-
-### Prerequisites
-- Node.js 18+
-- Supabase account
-- Netlify account (for deployment)
-
-### 1. **Clone & Install**
-```bash
-git clone https://github.com/abhinavdhakal/SplitIt.git
-cd SplitIt
-npm install
-```
-
-### 2. **Database Setup**
-1. Create a new Supabase project at [supabase.com](https://supabase.com)
-2. Go to the **SQL Editor** in your Supabase dashboard
-3. Copy and paste the entire contents of `complete-setup.sql` and run it
-4. ✅ This single file sets up all tables, indexes, functions, AND storage bucket needed!
-
-**Note**: The setup includes creating a `receipts` storage bucket for PDF uploads with proper authentication policies.
-
-### 3. **Environment Variables**
-Create `.env.local`:
-```env
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-```
-
-### 4. **Development**
-```bash
-npm run dev
-# App runs on http://localhost:3000
-```
-
-### 5. **Production Deployment**
-```bash
-npm run build
-npm start
-# Or deploy to Netlify
-```
-
-## 🗄️ Database Schema
-
-### Core Tables
-- **`groups`** - Group information and room codes
-- **`group_members`** - User membership in groups
-- **`receipts`** - Uploaded receipts and metadata
-- **`items`** - Parsed receipt items with prices
-- **`item_claims`** - User claims on items (quantities/splits)
-- **`user_profiles`** - Display names and user info
-- **`logs`** - Audit trail for all actions
-
-## 🎮 Usage Examples
-
-### Scenario 1: Grocery Run
-```
-🛒 Alice uploads Walmart receipt: $47.83
-📦 Items: Milk, Bread, Apples (×5), Cheese
-👥 Claims:
-   - Alice: Milk, Bread, Apples (×3)
-   - Bob: Cheese, Apples (×2)
-💰 Result: Alice pays $32.15, Bob pays $15.68
-```
-
-### Scenario 2: Pizza Night
-```
-🍕 Bob uploads restaurant receipt: $35.60
-📦 Items: 2 Pizzas, Drinks (×4), Salad
-👥 Claims:
-   - Pizza #1: Split between Alice (2 shares), Bob (1 share)
-   - Pizza #2: Split equally between Carol & Dave
-   - Drinks: Everyone claims 1 each
-💰 Result: Fair split with tax/tip distributed proportionally
-```
-
-## 🔧 Configuration
-
-### Supabase Settings
-- **Authentication**: Enable email auth
-- **RLS**: Disabled for MVP (enable for production)
-- **Site URL**: Set to your domain
-- **Redirect URLs**: Include your production URL
-
-### Receipt Parsing
-- **Supported formats**: PDF with selectable text
-- **Store compatibility**: Walmart, most grocery stores
-- **Languages**: English (extensible)
-
-## 🐛 Troubleshooting
-
-### PDF Not Parsing?
-- Ensure PDF has selectable text (not just an image)
-- Check browser console for parsing logs
-- Try a different receipt format
-
-### Items Missing Names?
-- Parser extracts from receipt structure
-- Some stores format differently
-- Manual editing coming soon
-
-### Claims Not Saving?
-- Check internet connection
-- Verify Supabase environment variables
-- Look for browser console errors
-
-### "Row Level Security Policy" Error
-- Make sure you ran all SQL setup files in Supabase
-- Check that your user is authenticated (signed in with email)
-- The setup creates permissive policies for authenticated users
-
-### "Bucket not found" Error
-- Ensure you ran the complete `complete-setup.sql` file
-- The setup creates a `receipts` storage bucket automatically
-- If still having issues, manually create the bucket in Supabase Storage dashboard
-- Make sure the bucket is named exactly `receipts` and is set to public
-
-## 🤝 Contributing
-
-We welcome contributions! Here's how:
-
-1. **Fork the repo**
-2. **Create a feature branch**: `git checkout -b my-new-feature`
-3. **Make your changes** with tests
-4. **Commit**: `git commit -am 'Add some feature'`
-5. **Push**: `git push origin my-new-feature`
-6. **Create Pull Request**
-
-### Development Guidelines
-- Use TypeScript for new features
-- Follow existing code style
-- Add tests for new functionality
-- Update documentation
-
-## 📄 License
-
-MIT License - see [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- **PDF.js** - Mozilla's PDF parsing library
-- **Supabase** - Backend-as-a-Service platform
-- **Next.js** - React framework
-- **Tailwind CSS** - Utility-first CSS framework
-
-## 📞 Support
-
-- **Issues**: [GitHub Issues](https://github.com/abhinavdhakal/SplitIt/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/abhinavdhakal/SplitIt/discussions)
-- **Email**: Create an issue for support
+![Project Status](https://img.shields.io/badge/Status-Production%20Ready-green)
 
 ---
 
-**Made with ❤️ for hassle-free expense splitting**
+## What It Does
 
-*No more mental math, awkward IOUs, or "I'll pay you back later" - just fair, transparent expense sharing.*
+* Create or join groups with simple codes
+* Upload Walmart PDF receipts (other formats coming later)
+* Claim items individually or split them with others
+* Tax and tip divided fairly and automatically
+* Clear summary of who owes what
 
-## Features
+---
 
-- **Simple Login**: Email magic link authentication
-- **Groups**: Create groups and share room codes
-- **Receipt Upload**: PDF parsing for Walmart+ receipts
-- **Item Claiming**: Members can claim items from receipts
-- **Auto Split**: Tax and tip split proportionally
-- **Mobile Friendly**: Responsive design
+## Screenshots
 
-## Database Tables Created
+* Group creation [i will have an image folder with 1,2,3.png as screenshot for here]
+* Login Page (/images/1.png)
+* Uploading a receipt (/images/2.png)
+* Claiming items (/images/3.png)
+* Final expense summary (/images/4.png)
 
-- `groups` - Group information
-- `group_members` - Who belongs to which group
-- `receipts` - Uploaded receipts with parsed data
-- `items` - Individual items from receipts
-- `logs` - Audit trail of actions
+---
+
+## Example
+
+Total receipt: $47.83
+
+Alice: Milk, Bread, 3 Apples
+Bob: Cheese, 2 Apples
+
+Result: Alice pays $32.15, Bob pays $15.68.
+
+Weeks later, everyone can still see exactly what they claimed.
+
+---
+# Setup
+
+### Requirements
+
+* Node.js 18+
+* Supabase account
+* Netlify (for hosting)
+
+---
+
+### Database
+
+1. Create a new project in Supabase
+2. Open the SQL editor and run `complete-setup.sql` (this sets up all tables and creates the `receipts` storage bucket)
+3. In Supabase, go to **Connect → App Frameworks → Next.js** and copy the provided `.env.local` variables
+
+---
+
+### Local Development
+
+1. Create a `.env.local` file in the project root and paste your Supabase variables
+
+   ```env
+   NEXT_PUBLIC_SUPABASE_URL=your_url
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_key
+   ```
+
+2. Install dependencies
+
+   ```bash
+   npm install
+   ```
+
+3. Run the app locally
+
+   ```bash
+   npm run dev
+   # Open http://localhost:3000
+   ```
+
+---
+
+### Deploying to Netlify
+
+1. Push this project to your own GitHub repository
+2. In Netlify, click **New site from Git** and select your repo
+3. Under **Site settings → Environment variables**, add the Supabase variables from `.env.local`
+4. Netlify will auto-detect Next.js and use:
+
+   ```bash
+   npm run build
+   ```
+5. After build, your app will be live at a Netlify URL (you can also set a custom domain)
+
+---
+
+### Connect Supabase and Netlify
+
+1. Copy your Netlify site URL
+2. In Supabase, go to **Authentication → URL Configuration**
+3. Add the Netlify URL to the list of allowed redirect URLs
+4. Save changes
+
+You’re done — users can now log in and start splitting receipts.
+ 
+---
+
+
+## Tech
+
+* Next.js + React + Tailwind
+* Supabase (Postgres + Auth)
+* PDF.js (currently only Walmart PDF receipts)
+
+---
+
+## Notes
+
+* Works only with Walmart PDF receipts right now
+* Support for scanning printed receipts and other stores is planned
+
+---
+
+## License
+
+MIT License

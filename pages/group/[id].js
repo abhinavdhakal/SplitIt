@@ -7,6 +7,7 @@ import ReceiptUpload from "../../components/ReceiptUpload";
 import ReceiptsList from "../../components/features/ReceiptsList";
 import MembersList from "../../components/features/MembersList";
 import RoomCodeCard from "../../components/features/RoomCodeCard";
+import AdminControls from "../../components/features/AdminControls";
 import Button from "../../components/ui/Button";
 
 export default function GroupPage() {
@@ -117,6 +118,12 @@ export default function GroupPage() {
             <div className="space-y-6">
               <RoomCodeCard groupId={groupId} />
               <MembersList members={members} />
+              <AdminControls
+                group={group}
+                members={members}
+                currentUserMembership={currentUserMembership}
+                onRefresh={refreshData}
+              />
             </div>
           </div>
         </div>
