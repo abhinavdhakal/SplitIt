@@ -21,11 +21,12 @@ SplitIt fixes that. Upload the Walmart PDF receipt after each order, let everyon
 
 ## Screenshots
 
-* Group creation [i will have an image folder with 1,2,3.png as screenshot for here]
-* Login Page (/images/1.png)
-* Uploading a receipt (/images/2.png)
-* Claiming items (/images/3.png)
-* Final expense summary (/images/4.png)
+![Group creation](/images/0.png)
+![Login page](/images/1.png)
+![Uploading a receipt](/images/2.png)
+![Claiming items](/images/3.png)
+![Final expense summary](/images/4.png)
+
 
 ---
 

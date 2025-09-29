@@ -99,10 +99,31 @@ export function useReceipts(receiptId) {
   const loadMembers = useCallback(async (groupId) => {
     if (!groupId) return;
 
-    const { data } = await supabase
+    let { data, error } = await supabase
       .from("group_members")
       .select("id, user_id, role, joined_at")
       .eq("group_id", groupId);
+
+    // Fallback if the full query fails (for production compatibility)
+    if (error) {
+      console.warn(
+        "Full member query failed in useReceipts, trying fallback:",
+        error
+      );
+      const fallback = await supabase
+        .from("group_members")
+        .select("user_id, role")
+        .eq("group_id", groupId);
+
+      data =
+        fallback.data?.map((member) => ({
+          id: member.user_id,
+          user_id: member.user_id,
+          role: member.role,
+          joined_at: new Date().toISOString(),
+        })) || [];
+    }
+
     setMembers(data || []);
 
     // Load user profiles for all members

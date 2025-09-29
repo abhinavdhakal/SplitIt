@@ -41,13 +41,27 @@ export function useGroups() {
       // Add current user as admin
       const { data: userData } = await supabase.auth.getUser();
       if (userData.user) {
-        await supabase.from("group_members").insert([
-          {
-            group_id: data.id,
-            user_id: userData.user.id,
-            role: "admin",
-          },
-        ]);
+        console.log("Adding user as admin to group:", {
+          group_id: data.id,
+          user_id: userData.user.id,
+        });
+
+        const { error: memberError } = await supabase
+          .from("group_members")
+          .insert([
+            {
+              group_id: data.id,
+              user_id: userData.user.id,
+              role: "admin",
+            },
+          ]);
+
+        if (memberError) {
+          console.error("Error adding user to group:", memberError);
+          throw memberError;
+        }
+
+        console.log("Successfully added user as admin to group");
 
         // Refresh groups
         await fetchGroups(userData.user);

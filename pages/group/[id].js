@@ -8,6 +8,7 @@ import ReceiptsList from "../../components/features/ReceiptsList";
 import MembersList from "../../components/features/MembersList";
 import RoomCodeCard from "../../components/features/RoomCodeCard";
 import AdminControls from "../../components/features/AdminControls";
+import DatabaseDiagnostic from "../../components/debug/DatabaseDiagnostic";
 import Button from "../../components/ui/Button";
 
 export default function GroupPage() {
@@ -124,6 +125,9 @@ export default function GroupPage() {
                 currentUserMembership={currentUserMembership}
                 onRefresh={refreshData}
               />
+
+              {/* Temporary diagnostic component - remove after debugging */}
+              <DatabaseDiagnostic groupId={groupId} />
             </div>
           </div>
         </div>

@@ -73,12 +73,40 @@ export function useGroup(groupId) {
     if (!groupId) return;
 
     try {
-      const { data } = await supabase
+      console.log("Fetching members for group:", groupId);
+
+      // Try the full query first, fall back to basic query if needed
+      let { data, error } = await supabase
         .from("group_members")
         .select("id, user_id, role, joined_at")
         .eq("group_id", groupId);
 
+      // If the full query fails, try with basic fields
+      if (error) {
+        console.warn("Full member query failed, trying basic query:", error);
+        const fallback = await supabase
+          .from("group_members")
+          .select("user_id, role")
+          .eq("group_id", groupId);
+
+        if (fallback.error) {
+          throw fallback.error;
+        }
+
+        // Map fallback data to include missing fields
+        data =
+          fallback.data?.map((member) => ({
+            id: member.user_id, // Use user_id as fallback ID
+            user_id: member.user_id,
+            role: member.role,
+            joined_at: new Date().toISOString(), // Use current date as fallback
+          })) || [];
+      }
+
+      console.log("Raw member data:", data);
+
       if (!data || data.length === 0) {
+        console.log("No members found for group");
         setMembers([]);
         return;
       }
