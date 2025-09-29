@@ -138,9 +138,8 @@ export default function JoinGroup() {
                   type="text"
                   value={roomCode}
                   onChange={(e) => setRoomCode(e.target.value)}
-                  placeholder="Enter 6-character room code"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center text-lg font-mono tracking-wider uppercase"
-                  maxLength="6"
+                  placeholder="Enter room code"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center text-sm font-mono tracking-wider"
                   required
                   autoFocus
                   style={{ textTransform: "uppercase" }}
@@ -199,9 +198,7 @@ export default function JoinGroup() {
               </h3>
               <div className="text-sm text-gray-600 space-y-2 text-left">
                 <p>• Ask the group creator to share the room code with you</p>
-                <p>
-                  <p>• The room code is the same as the Group ID</p>
-                </p>
+                <p>• The room code is the same as the Group ID</p>
                 <p>• You can find it on the group page under the group name</p>
               </div>
             </div>
