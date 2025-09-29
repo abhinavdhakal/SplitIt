@@ -21,11 +21,20 @@ SplitIt fixes that. Upload the Walmart PDF receipt after each order, let everyon
 
 ## Screenshots
 
-![Login page](/images/1.png)
-![Home page](/images/2.png)
-![Uploading a receipt](/images/3.png)
-![Claiming items](/images/4.png)
-![Final expense summary](/images/5.png)
+![Login page](/images/1.png)  
+The login page where users enter credentials to access the app.
+
+![Home page](/images/2.png)  
+Main dashboard showing groups and recent activity.
+
+![Uploading a receipt](/images/3.png)  
+Group interface for managing receipts.
+
+![Claiming items](/images/4.png)  
+Screen where users can select and claim items from a receipt.
+
+![Final expense summary](/images/5.png)  
+Overview of all expenses and balances within the group.
 
 
 ---
