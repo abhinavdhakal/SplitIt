@@ -75,13 +75,13 @@ export function useGroup(groupId) {
     try {
       console.log("Fetching members for group:", groupId);
 
-      // Try the full query first, fall back to basic query if needed
+      // First try getting all the fields we need
       let { data, error } = await supabase
         .from("group_members")
         .select("id, user_id, role, joined_at")
         .eq("group_id", groupId);
 
-      // If the full query fails, try with basic fields
+      // Sometimes production DB is missing columns, so fallback to basic query
       if (error) {
         console.warn("Full member query failed, trying basic query:", error);
         const fallback = await supabase
@@ -93,13 +93,13 @@ export function useGroup(groupId) {
           throw fallback.error;
         }
 
-        // Map fallback data to include missing fields
+        // Fill in missing fields with fallback values
         data =
           fallback.data?.map((member) => ({
-            id: member.user_id, // Use user_id as fallback ID
+            id: member.user_id, // just use user_id since we need something
             user_id: member.user_id,
             role: member.role,
-            joined_at: new Date().toISOString(), // Use current date as fallback
+            joined_at: new Date().toISOString(), // fake join date for now
           })) || [];
       }
 

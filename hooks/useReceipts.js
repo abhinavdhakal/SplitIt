@@ -104,7 +104,7 @@ export function useReceipts(receiptId) {
       .select("id, user_id, role, joined_at")
       .eq("group_id", groupId);
 
-    // Fallback if the full query fails (for production compatibility)
+    // Sometimes the DB schema is different in production, so fallback
     if (error) {
       console.warn(
         "Full member query failed in useReceipts, trying fallback:",

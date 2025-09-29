@@ -38,7 +38,7 @@ export function useGroups() {
 
       if (error) throw error;
 
-      // Add current user as admin
+      // Make the creator an admin of the new group
       const { data: userData } = await supabase.auth.getUser();
       if (userData.user) {
         console.log("Adding user as admin to group:", {
@@ -57,11 +57,11 @@ export function useGroups() {
           ]);
 
         if (memberError) {
-          console.error("Error adding user to group:", memberError);
+          console.error("Failed to add user to group:", memberError);
           throw memberError;
         }
 
-        console.log("Successfully added user as admin to group");
+        console.log("User added as admin successfully");
 
         // Refresh groups
         await fetchGroups(userData.user);

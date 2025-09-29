@@ -30,7 +30,7 @@ export default function AdminControls({
     console.log("Removing member:", { memberId, memberName });
 
     if (!memberId) {
-      console.error("Member ID is undefined");
+      console.error("memberId is undefined - this shouldn't happen");
       alert("Error: Member ID is undefined. Please refresh and try again.");
       return;
     }
