@@ -200,7 +200,7 @@ export default function JoinGroup() {
               <div className="text-sm text-gray-600 space-y-2 text-left">
                 <p>• Ask the group creator to share the room code with you</p>
                 <p>
-                  • The room code is the same as the Group ID (6 characters)
+                  <p>• The room code is the same as the Group ID</p>
                 </p>
                 <p>• You can find it on the group page under the group name</p>
               </div>
