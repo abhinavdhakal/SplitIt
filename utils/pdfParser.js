@@ -124,6 +124,16 @@ export function parseReceiptText(text) {
     console.log(`Line ${i + 1}: "${line}"`);
   });
 
+  // SPECIAL DEBUG: Look for the coffee item specifically
+  console.log("\n=== COFFEE DEBUG ===");
+  const coffeeLines = lines.filter((line) =>
+    /NESCAF|coffee|instant|clásico|clasico/i.test(line)
+  );
+  console.log("Lines containing coffee-related words:", coffeeLines.length);
+  coffeeLines.forEach((line, i) => {
+    console.log(`Coffee line ${i + 1}: "${line}"`);
+  });
+
   // Look for lines with the Walmart pattern
   for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
     let line = lines[lineIndex].trim();
@@ -138,20 +148,34 @@ export function parseReceiptText(text) {
 
     // Multiple patterns to try:
 
-    // Pattern 1: ItemName Status Qty N $Price
+    // Pattern 1: ItemName Status Qty N $Price - more flexible for special characters
     const walmartMatch = line.match(
-      /^(.+?)\s+(Shopped|Unavailable|Available)\s+Qty\s+(\d+)\s+\$([0-9]+\.[0-9]{2})/i
+      /^(.+?)\s+(Shopped|Unavailable|Available)\s+Qty\s+(\d+)\s+\$([0-9]+\.[0-9]{2})/iu
     );
 
-    // Pattern 2: ItemName Qty N $Price (without status)
+    // Pattern 2: ItemName Qty N $Price (without status) - more flexible
     const simpleMatch = line.match(
-      /^(.+?)\s+Qty\s+(\d+)\s+\$([0-9]+\.[0-9]{2})/i
+      /^(.+?)\s+Qty\s+(\d+)\s+\$([0-9]+\.[0-9]{2})/iu
     );
 
-    // Pattern 3: $Price at the end with Qty somewhere
+    // Pattern 3: $Price at the end with Qty somewhere - more flexible
     const priceEndMatch = line.match(
-      /^(.+?)\s+.*Qty\s+(\d+).*\$([0-9]+\.[0-9]{2})$/i
+      /^(.+?)\s+.*Qty\s+(\d+).*\$([0-9]+\.[0-9]{2})$/iu
     );
+
+    // Pattern 4: More lenient - anywhere in line with status and price
+    const lenientMatch = line.match(
+      /(.+?)\s+(Shopped|Unavailable|Available)\s+.*Qty\s+(\d+)\s+.*\$([0-9]+\.[0-9]{2})/iu
+    );
+
+    // SPECIAL DEBUG for coffee item
+    if (/NESCAF|coffee|instant|clásico|clasico/i.test(line)) {
+      console.log(`🔍 COFFEE LINE DEBUG: "${line}"`);
+      console.log("Walmart match:", walmartMatch);
+      console.log("Simple match:", simpleMatch);
+      console.log("Price end match:", priceEndMatch);
+      console.log("Lenient match:", lenientMatch);
+    }
 
     let matchResult = null;
     let patternUsed = "";
@@ -180,6 +204,14 @@ export function parseReceiptText(text) {
         status: "unknown",
       };
       patternUsed = "Price at end";
+    } else if (lenientMatch) {
+      matchResult = {
+        name: lenientMatch[1].trim(),
+        qty: parseInt(lenientMatch[3]),
+        price: parseFloat(lenientMatch[4]),
+        status: lenientMatch[2],
+      };
+      patternUsed = "Lenient (flexible)";
     }
 
     if (matchResult) {
@@ -197,11 +229,27 @@ export function parseReceiptText(text) {
         status: matchResult.status,
       });
 
-      if (
-        name &&
-        name.length >= 3 &&
-        !/(total|tax|tip|subtotal|fee|order|charge|delivery|pickup)/i.test(name)
-      ) {
+      // DEBUG: Check each validation condition
+      const hasName = !!name;
+      const lengthOk = name && name.length >= 3;
+      const exclusionMatch =
+        /\b(total|tax|tip|subtotal|fee|order|charge|delivery|pickup)\b/i.test(
+          name
+        );
+
+      console.log(`🔍 Validation debug for "${name}":`, {
+        hasName,
+        length: name ? name.length : 0,
+        lengthOk,
+        exclusionMatch,
+        exclusionPattern: exclusionMatch
+          ? name.match(
+              /\b(total|tax|tip|subtotal|fee|order|charge|delivery|pickup)\b/i
+            )
+          : null,
+      });
+
+      if (hasName && lengthOk && !exclusionMatch) {
         items.push({
           name: name,
           quantity: matchResult.qty,
@@ -214,7 +262,9 @@ export function parseReceiptText(text) {
           `✅ Added item: "${name}" Qty:${matchResult.qty} $${matchResult.price}`
         );
       } else {
-        console.log(`❌ Rejected: name too short or contains exclusions`);
+        console.log(
+          `❌ Rejected: hasName=${hasName}, lengthOk=${lengthOk}, exclusionMatch=${exclusionMatch}`
+        );
       }
     }
   }
@@ -246,7 +296,7 @@ export function parseReceiptText(text) {
       if (
         name &&
         name.length >= 3 &&
-        !/(total|tax|tip|subtotal|fee|order|charge)/i.test(name)
+        !/\b(total|tax|tip|subtotal|fee|order|charge)\b/i.test(name)
       ) {
         items.push({
           name: name,
