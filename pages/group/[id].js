@@ -1,4 +1,5 @@
 import { useRouter } from "next/router";
+import Head from "next/head";
 import { useGroup } from "../../hooks/useGroup";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import GroupHeader from "../../components/layout/GroupHeader";
@@ -82,31 +83,44 @@ export default function GroupPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50">
-      <GroupHeader group={group} />
+    <>
+      <Head>
+        <title>
+          {group?.name ? `${group.name} - SplitIt` : "Group - SplitIt"}
+        </title>
+        <meta
+          name="description"
+          content="Manage your group expenses and receipts with SplitIt"
+        />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+      </Head>
 
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-6">
-            <ReceiptUpload groupId={groupId} onUploaded={refreshData} />
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50">
+        <GroupHeader group={group} />
 
-            <ReceiptsList
-              receipts={receipts}
-              currentUser={currentUser}
-              currentUserMembership={currentUserMembership}
-              loading={loading}
-              onFinalizeReceipt={handleFinalizeReceipt}
-            />
-          </div>
+        <div className="max-w-6xl mx-auto px-4 py-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Main Content */}
+            <div className="lg:col-span-2 space-y-6">
+              <ReceiptUpload groupId={groupId} onUploaded={refreshData} />
 
-          {/* Sidebar */}
-          <div className="space-y-6">
-            <RoomCodeCard groupId={groupId} />
-            <MembersList members={members} />
+              <ReceiptsList
+                receipts={receipts}
+                currentUser={currentUser}
+                currentUserMembership={currentUserMembership}
+                loading={loading}
+                onFinalizeReceipt={handleFinalizeReceipt}
+              />
+            </div>
+
+            {/* Sidebar */}
+            <div className="space-y-6">
+              <RoomCodeCard groupId={groupId} />
+              <MembersList members={members} />
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }

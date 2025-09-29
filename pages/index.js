@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import Head from "next/head";
 import { useAuth } from "../hooks/useAuth";
 import { useGroups } from "../hooks/useGroups";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
@@ -54,41 +55,52 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50">
-      <AppHeader user={user} onSignOut={signOut} />
+    <>
+      <Head>
+        <title>SplitIt - Split Receipts & Expenses with Friends</title>
+        <meta
+          name="description"
+          content="Easily split receipts and expenses with your friends. Upload receipts, track expenses, and settle up seamlessly."
+        />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+      </Head>
 
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        {!user && (
-          <>
-            <Hero />
-            <AuthSection />
-          </>
-        )}
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50">
+        <AppHeader user={user} onSignOut={signOut} />
 
-        {user && (
-          <>
-            <WelcomeSection
-              user={user}
-              userProfile={userProfile}
-              profileLoading={profileLoading}
-            />
+        <div className="max-w-6xl mx-auto px-4 py-8">
+          {!user && (
+            <>
+              <Hero />
+              <AuthSection />
+            </>
+          )}
 
-            <ProfileSection
-              user={user}
-              userProfile={userProfile}
-              profileLoading={profileLoading}
-              onUpdateProfile={updateDisplayName}
-            />
+          {user && (
+            <>
+              <WelcomeSection
+                user={user}
+                userProfile={userProfile}
+                profileLoading={profileLoading}
+              />
 
-            <GroupsList groups={groups} />
+              <ProfileSection
+                user={user}
+                userProfile={userProfile}
+                profileLoading={profileLoading}
+                onUpdateProfile={updateDisplayName}
+              />
 
-            <ActionCards
-              onCreateGroup={handleCreateGroup}
-              creating={groupsLoading}
-            />
-          </>
-        )}
+              <GroupsList groups={groups} />
+
+              <ActionCards
+                onCreateGroup={handleCreateGroup}
+                creating={groupsLoading}
+              />
+            </>
+          )}
+        </div>
       </div>
-    </div>
+    </>
   );
 }

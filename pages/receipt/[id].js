@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useRouter } from "next/router";
+import Head from "next/head";
 import { supabase } from "../../lib/supabaseClient";
 import { useReceipts } from "../../hooks/useReceipts";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
@@ -216,74 +217,88 @@ export default function ReceiptView() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
-      <div className="max-w-4xl mx-auto">
-        <ReceiptHeader
-          receipt={receipt}
-          currentUser={currentUser}
-          userProfiles={userProfiles}
-          editingMode={editingMode}
-          onToggleEditMode={() => setEditingMode(!editingMode)}
-          onFinalize={handleFinalize}
-          onUndoFinalization={handleUndoFinalization}
-          onDeleteReceipt={handleDelete}
-          onUpdateReceiptName={updateReceiptName}
+    <>
+      <Head>
+        <title>
+          {receipt?.name ? `${receipt.name} - SplitIt` : "Receipt - SplitIt"}
+        </title>
+        <meta
+          name="description"
+          content="View and manage your receipt items, expenses and splits with SplitIt"
         />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+      </Head>
 
-        <ExpenseBreakdown
-          receipt={receipt}
-          userProfiles={userProfiles}
-          items={items}
-          itemClaims={itemClaims}
-        />
+      <div className="min-h-screen bg-slate-50 p-6">
+        <div className="max-w-4xl mx-auto">
+          <ReceiptHeader
+            receipt={receipt}
+            currentUser={currentUser}
+            userProfiles={userProfiles}
+            editingMode={editingMode}
+            onToggleEditMode={() => setEditingMode(!editingMode)}
+            onFinalize={handleFinalize}
+            onUndoFinalization={handleUndoFinalization}
+            onDeleteReceipt={handleDelete}
+            onUpdateReceiptName={updateReceiptName}
+          />
 
-        <ReceiptSummary
-          receipt={receipt}
-          currentUser={currentUser}
-          editingMode={editingMode}
-          onUpdateReceipt={updateReceipt}
-          onFinalize={handleFinalize}
-          onShowExpenseBreakdown={() => setShowExpenseBreakdown(true)}
-          items={items}
-          refreshData={refreshData}
-        />
+          <ExpenseBreakdown
+            receipt={receipt}
+            userProfiles={userProfiles}
+            items={items}
+            itemClaims={itemClaims}
+          />
 
-        <ItemsList
-          items={items}
-          currentUser={currentUser}
-          receipt={receipt}
-          editingMode={editingMode}
-          itemClaims={itemClaims}
-          userProfiles={userProfiles}
-          onClaimQuantity={claimQuantity}
-          onUnclaimItem={unclaimItem}
-          onUpdateItem={updateItem}
-          onAddItem={addItem}
-          getTotalClaimedQuantity={getTotalClaimedQuantity}
-          getMyClaimedQuantity={getMyClaimedQuantity}
-          getAvailableQuantity={getAvailableQuantity}
-          members={members}
-          splittingItem={splittingItem}
-          setSplittingItem={setSplittingItem}
-          splitShares={splitShares}
-          setSplitShares={setSplitShares}
-        />
+          <ReceiptSummary
+            receipt={receipt}
+            currentUser={currentUser}
+            editingMode={editingMode}
+            onUpdateReceipt={updateReceipt}
+            onFinalize={handleFinalize}
+            onShowExpenseBreakdown={() => setShowExpenseBreakdown(true)}
+            items={items}
+            refreshData={refreshData}
+          />
 
-        {/* Expense Breakdown Modal */}
-        <Modal
-          isOpen={showExpenseBreakdown}
-          onClose={() => setShowExpenseBreakdown(false)}
-          title="Expense Breakdown"
-          size="large"
-        >
-          <div className="space-y-4">
-            {/* Preview breakdown logic would go here */}
-            <p className="text-gray-600">
-              Expense breakdown preview functionality would be implemented here.
-            </p>
-          </div>
-        </Modal>
+          <ItemsList
+            items={items}
+            currentUser={currentUser}
+            receipt={receipt}
+            editingMode={editingMode}
+            itemClaims={itemClaims}
+            userProfiles={userProfiles}
+            onClaimQuantity={claimQuantity}
+            onUnclaimItem={unclaimItem}
+            onUpdateItem={updateItem}
+            onAddItem={addItem}
+            getTotalClaimedQuantity={getTotalClaimedQuantity}
+            getMyClaimedQuantity={getMyClaimedQuantity}
+            getAvailableQuantity={getAvailableQuantity}
+            members={members}
+            splittingItem={splittingItem}
+            setSplittingItem={setSplittingItem}
+            splitShares={splitShares}
+            setSplitShares={setSplitShares}
+          />
+
+          {/* Expense Breakdown Modal */}
+          <Modal
+            isOpen={showExpenseBreakdown}
+            onClose={() => setShowExpenseBreakdown(false)}
+            title="Expense Breakdown"
+            size="large"
+          >
+            <div className="space-y-4">
+              {/* Preview breakdown logic would go here */}
+              <p className="text-gray-600">
+                Expense breakdown preview functionality would be implemented
+                here.
+              </p>
+            </div>
+          </Modal>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
